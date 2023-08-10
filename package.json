@@ -10,7 +10,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "buffer-hexdump": "^1.0.0",
     "intel-hex": "^0.1.2",
-    "yargs": "^17.4.0"
+    "moment": "^2.29.4",
+    "yargs": "^17.7.2"
   }
 }
