@@ -26,10 +26,10 @@ if (is.null(opt$filename)) {
 
 data <- read.csv(opt$filename)
 if (! is.null(opt$'frame-start')) {
-    data <- data %>% filter(FrameCount >= opt$'frame-start')
+    data <- data %>% filter(Seqno >= opt$'frame-start')
 }
 if (! is.null(opt$'frame-end')) {
-    data <- data %>% filter(FrameCount <= opt$'frame-end')
+    data <- data %>% filter(Seqno <= opt$'frame-end')
 }
 
 data <- data %>%
@@ -56,27 +56,31 @@ data$I3Rms <- sapply(1:nrow(data), function(n) rms(data$I3Scaled, n))
 
 data <- data[SAMPLES_PER_PERIOD:nrow(data),]
 
-inst_phase1 <- data[, c('FrameCount','U1Scaled','I1Scaled')]
-inst_phase1 <- melt(inst_phase1, id = c('FrameCount'))
-inst_phase2 <- data[, c('FrameCount','U2Scaled','I2Scaled')]
-inst_phase2 <- melt(inst_phase2, id = c('FrameCount'))
-inst_phase3 <- data[, c('FrameCount','U3Scaled','I3Scaled')]
-inst_phase3 <- melt(inst_phase3, id = c('FrameCount'))
+inst_phase1 <- data[, c('Seqno','U1Scaled','I1Scaled')]
+inst_phase1 <- melt(inst_phase1, id = c('Seqno'))
+inst_phase2 <- data[, c('Seqno','U2Scaled','I2Scaled')]
+inst_phase2 <- melt(inst_phase2, id = c('Seqno'))
+inst_phase3 <- data[, c('Seqno','U3Scaled','I3Scaled')]
+inst_phase3 <- melt(inst_phase3, id = c('Seqno'))
 
-rms_phase1 <- data[, c('FrameCount','U1Rms','I1Rms')]
-rms_phase1 <- melt(rms_phase1, id = c('FrameCount'))
-rms_phase2 <- data[, c('FrameCount','U2Rms','I2Rms')]
-rms_phase2 <- melt(rms_phase2, id = c('FrameCount'))
-rms_phase3 <- data[, c('FrameCount','U3Rms','I3Rms')]
-rms_phase3 <- melt(rms_phase3, id = c('FrameCount'))
+rms_phase1 <- data[, c('Seqno','U1Rms','I1Rms')]
+rms_phase1 <- melt(rms_phase1, id = c('Seqno'))
+rms_phase2 <- data[, c('Seqno','U2Rms','I2Rms')]
+rms_phase2 <- melt(rms_phase2, id = c('Seqno'))
+rms_phase3 <- data[, c('Seqno','U3Rms','I3Rms')]
+rms_phase3 <- melt(rms_phase3, id = c('Seqno'))
 
 plot <- function(data) {
-    return(ggplot(data, aes(x=FrameCount, y=value, color=variable)) +
+    return(ggplot(data, aes(x=Seqno, y=value, color=variable)) +
         geom_line() +
         scale_color_manual(values = c('red', 'blue')) +
-        labs(x = 'Frame count', y = 'Amplitude', color = '')
+        labs(x = 'Seqno', y = 'Amplitude', color = '')
     )
 }
+
+plots = list(plot(inst_phase1), plot(rms_phase1),
+     plot(inst_phase2), plot(rms_phase2),
+     plot(inst_phase3), plot(rms_phase3))
 
 suffix=''
 if (! is.null(opt$'frame-start'))
@@ -85,11 +89,6 @@ if (! is.null(opt$'frame-end'))
     suffix <- paste(suffix, 'e', opt$'frame-end', sep='')
 if (nchar(suffix) > 0)
     suffix <- paste('-', suffix, sep='')
-
-ggsave(paste('phase-1-inst', suffix, '.png', sep=''), plot(inst_phase1))
-ggsave(paste('phase-2-inst', suffix, '.png', sep=''), plot(inst_phase2))
-ggsave(paste('phase-3-inst', suffix, '.png', sep=''), plot(inst_phase3))
-
-ggsave(paste('phase-1-rms', suffix, '.png', sep=''), plot(rms_phase1))
-ggsave(paste('phase-2-rms', suffix, '.png', sep=''), plot(rms_phase2))
-ggsave(paste('phase-3-rms', suffix, '.png', sep=''), plot(rms_phase3))
+pdf(paste('plots', suffix, '.pdf', sep=''), width=10, height=8)
+plots
+dev.off()

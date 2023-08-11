@@ -147,7 +147,7 @@ var recvCnt = 0;
 var ws = null;
 if (argv.csv) {
     ws = fs.createWriteStream(argv.csv);
-    ws.write('FrameCount,Time,U1,I1,U2,I2,U3,I3\n');
+    ws.write('Seqno,Time,U1,I1,U2,I2,U3,I3\n');
 }
 
 client.connect(argv.port, argv.host, () => {
