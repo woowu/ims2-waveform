@@ -2,7 +2,7 @@
 
 /* Receive waveform streaming from TCP. Each message
  * is in the form:
- *   64bit timestamp | 32 bit len | waveform chunk
+ *   0x3e | seqno | 64bit timestamp | 32 bit len | waveform chunk
  */
 
 import fs from 'node:fs';
@@ -22,12 +22,6 @@ const MESSAGE_SEQNO_LEN = 4;
 const MESSAGE_TIMESTAMP_LEN = 8;
 const MESSAGE_LEN_SZ = 4;
 const MESSAGE_HEAD_LEN = MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN + MESSAGE_LEN_SZ;
-
-/* copy from E355 datamodel */
-const ScalingFactors = [
-    6.72565e-04, // UScaleInst
-    1.44314e-04, // IScaleInst
-];
 
 function putData(workpad, data)
 {
@@ -60,7 +54,7 @@ function parseStream(workpad, ws)
                 value = new DataView(new Uint8Array(
                     frame.slice(pos, pos + 2)
                 ).buffer).getInt16(0, true);
-                ws.write(',' + value * ScalingFactors[q]);
+                ws.write(',' + value);
                 pos += 2;
             }
         }
@@ -151,8 +145,10 @@ const workpad = {
 const client = new net.Socket();
 var recvCnt = 0;
 var ws = null;
-if (argv.csv)
+if (argv.csv) {
     ws = fs.createWriteStream(argv.csv);
+    ws.write('FrameCount,Time,U1,I1,U2,I2,U3,I3\n');
+}
 
 client.connect(argv.port, argv.host, () => {
     console.log('connected');
