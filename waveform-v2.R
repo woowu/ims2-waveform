@@ -2,6 +2,7 @@
 library(optparse)
 library(dplyr)
 library(tidyverse)
+library(dplR)
 library(reshape2)
 library(ggplot2)
 library(cowplot)
@@ -13,9 +14,12 @@ ISCALE <- 4.61806e-3
 SAMPLES_PER_PERIOD <- 128
 RATE <- 6.4e3
 
+options(max.print=60 * RATE)
+
 option_list = list(
     make_option(c("-f", "--filename"), type="character", help="cvs filename"),
-    make_option(c("-z", "--zoom-in"), type="character", default='0-1', help="zooom-in sectons, e.g., 0.2-0.25,0.65-0.75")
+    make_option(c("-z", "--zoom-in"), type="character",
+                help="zooom-in sectons in secs, e.g., 195-199.5,301.5-305.2")
 )
  
 opt_parser = OptionParser(option_list=option_list)
@@ -26,12 +30,7 @@ if (is.null(opt$filename)) {
     stop('no csv filename provided')
 }
 
-range_spec <- lapply(
-           str_split(str_split(opt$'zoom-in', ',')[[1]], '-'),
-           as.numeric)
-
 data <- read.csv(opt$filename)
-
 data <- data %>%
     mutate(U1Scaled = U1 * USCALE) %>%
     mutate(I1Scaled = I1 * ISCALE) %>%
@@ -64,11 +63,55 @@ data$I3Rms <- sapply(1:nrow(data), function(n) rms(data$I3Scaled, n))
 #
 data <- data[SAMPLES_PER_PERIOD:nrow(data),]
 
-range_spec <- lapply(range_spec, function(range, data) {
-           sapply(as.integer(range * nrow(data)), function(n) as.integer(max(n, 1)))
-        }, data=data)
+# low-pass smooth the Rms
+data$U1RmsLowPass <- pass.filt(data$U1Rms, W=0.2, type='low', method='Butterworth')
+data$U2RmsLowPass <- pass.filt(data$U2Rms, W=0.2, type='low', method='Butterworth')
+data$U3RmsLowPass <- pass.filt(data$U3Rms, W=0.2, type='low', method='Butterworth')
+data$I1RmsLowPass <- pass.filt(data$I1Rms, W=0.2, type='low', method='Butterworth')
+data$I2RmsLowPass <- pass.filt(data$I2Rms, W=0.2, type='low', method='Butterworth')
+data$I3RmsLowPass <- pass.filt(data$I3Rms, W=0.2, type='low', method='Butterworth')
 
-plot_range <- function(range, data) {
+# A function repsented as two vectors x and y. 'diff' calculate the derivative
+# of the function.
+#
+diff <- function(x, y, n) {
+    if (length(y) > n)
+        return((y[n + 1] - y[n])/(x[n + 1] - x[n]))
+    else
+        return(NA)
+}
+
+# Derivatives of Rms low-pass'ed
+#
+data$dU1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U1RmsLowPass, n))
+data$dU2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U2RmsLowPass, n))
+data$dU3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U3RmsLowPass, n))
+data$dI1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I1RmsLowPass, n))
+data$dI2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I2RmsLowPass, n))
+data$dI3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I3RmsLowPass, n))
+
+# The 2nd Derivatives
+#
+data$d2U1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU1Rms, n))
+data$d2U2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU2Rms, n))
+data$d2U3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU3Rms, n))
+data$d2I1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI1Rms, n))
+data$d2I2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI2Rms, n))
+data$d2I3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI3Rms, n))
+
+# The value of the 2nd derivative are NA's in the last two rows.
+#
+data <- data[1:(nrow(data) - 2),]
+
+if (is.null(opt$'zoom-in')) {
+    range_spec <- list(c(min(data$Time), max(data$Time)))
+} else {
+    range_spec <- lapply(
+               str_split(str_split(opt$'zoom-in', ',')[[1]], '-'),
+               as.numeric)
+}
+
+plot_by_range <- function(range, data) {
     timeHMS_formatter <- function(s) {
         h <- floor(s/3600)
         m <- floor((s/60) %% 60)
@@ -80,13 +123,17 @@ plot_range <- function(range, data) {
     plot <- function(data) {
         ggplot(data, aes(x=Time, y=value, color=variable)) +
             geom_line() +
-            scale_color_manual(values = c('red', 'blue')) +
+            scale_color_manual(values = c('orange', 'blue')) +
             labs(y='Voltage/Current') +
             scale_x_continuous(name='Time', labels=timeHMS_formatter) +
-            theme(legend.position='none')
+            theme_bw() +
+            theme(legend.position='none',
+                  panel.background = element_rect(fill = "cornsilk", colour = NA),
+                  plot.background = element_rect(fill = "cornsilk", colour = NA),
+            )
     }
 
-    data <- data[range[1]:range[2],]
+    data <- data %>% filter(Time >= range[1] & Time <= range[2])
 
     inst_plots <- lapply(1:3, function(phase) {
             plot(melt(data[, c('Time',
@@ -100,21 +147,64 @@ plot_range <- function(range, data) {
                                 paste('I', phase, 'Rms', sep=''))
                           ], id = c('Time')))
         })
+    d2rms_plots <- lapply(1:3, function(phase) {
+            plot(melt(data[, c('Time',
+                                paste('d2U', phase, 'Rms', sep=''),
+                                paste('d2I', phase, 'Rms', sep=''))
+                          ], id = c('Time')))
+        })
 
     inst_row <- plot_grid(inst_plots[[1]], inst_plots[[2]], inst_plots[[3]], ncol=3)
     rms_row <- plot_grid(rms_plots[[1]], rms_plots[[2]], rms_plots[[3]], ncol=3)
+    d2rms_row <- plot_grid(d2rms_plots[[1]], d2rms_plots[[2]], d2rms_plots[[3]], ncol=3)
 
     inst_title <- ggdraw() + 
         draw_label('Instantaneous', fontface = 'bold', x = 0, hjust = 0) +
-        theme(plot.margin = margin(0, 0, 0, 7))
+        theme(plot.margin = margin(0, 0, 0, 7),
+              plot.background = element_rect(fill = "cornsilk", color = NA)
+        )
     rms_title <- ggdraw() + 
         draw_label('RMS', fontface = 'bold', x = 0, hjust = 0) +
-        theme(plot.margin = margin(0, 0, 0, 7))
-    plot_grid(inst_title, inst_row, rms_title, rms_row, ncol=1, rel_heights=c(.1, .4, .1, .4))
+        theme(plot.margin = margin(0, 0, 0, 7),
+              plot.background = element_rect(fill = "cornsilk", color = NA)
+        )
+    d2rms_title <- ggdraw() + 
+        draw_label(expression(d^2 ~ RMS), fontface = 'bold', x = 0, hjust = 0) +
+        theme(plot.margin = margin(0, 0, 0, 7),
+              plot.background = element_rect(fill = "cornsilk", color = NA)
+        )
+    plot_grid(inst_title, inst_row, rms_title, rms_row, d2rms_title, d2rms_row,
+              ncol=1, rel_heights=c(.03, .3, .03, .3, .03, .3))
 }
 
-plots <- lapply(range_spec, plot_range, data=data)
+calc_data_size <- function(range, data) {
+    nrow(data %>% filter(Time >= range[1] & Time <= range[2]))
+}
 
-pdf('plots.pdf', width=16.5, height=11.7)
-plots
-dev.off()
+save_by_index <- function(n, plots, range_spec, sizes, prefix) {
+    name <- paste(prefix, range_spec[[n]][1], '-', range_spec[[n]][2], sep='')
+    ggsave(paste(name, '.png', sep=''), plots[[n]],
+           width=11.7, height=8.3, dpi=600)
+    if (sizes[[n]] <= 20e3) {
+        ggsave(paste(name, '.pdf', sep=''), plots[[n]],
+               width=11.7, height=8.3)
+        ggsave(paste(name, '.svg', sep=''), plots[[n]],
+               width=11.7, height=8.3)
+    }
+}
+
+plots <- lapply(range_spec, plot_by_range, data=data)
+sizes <- lapply(range_spec, calc_data_size, data=data)
+lapply(1:length(range_spec), save_by_index, plots=plots, range_spec=range_spec,
+       sizes=sizes,
+       prefix=paste(
+                    head(str_split(opt$filename, '\\.')[[1]], -1),
+                    '-', collapse='', sep='')
+)
+
+# Below method saves to a multi-page PDF file, but the file is too slow to open
+# when the number of points is huge.
+#
+#pdf('plots.pdf', width=16.5, height=11.7)
+#plots
+#dev.off()
