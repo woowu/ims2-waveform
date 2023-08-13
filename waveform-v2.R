@@ -17,9 +17,11 @@ RATE <- 6.4e3
 options(max.print=60 * RATE)
 
 option_list = list(
-    make_option(c("-f", "--filename"), type="character", help="cvs filename"),
-    make_option(c("-z", "--zoom-in"), type="character",
-                help="zooom-in sectons in secs, e.g., 195-199.5,301.5-305.2")
+    make_option(c('-f', '--filename'), type='character', help='cvs filename'),
+    make_option(c('-z', '--zoom-in'), type='character',
+                help='zooom-in sectons in secs, e.g., 195-199.5,301.5-305.2'),
+    make_option(c('-P', '--no-plot'), action='store_true', default=FALSE,
+                help='not to plot, only save processed data')
 )
  
 opt_parser = OptionParser(option_list=option_list)
@@ -29,6 +31,9 @@ if (is.null(opt$filename)) {
     print_help(opt_parser)
     stop('no csv filename provided')
 }
+
+name_prefix <- paste(head(str_split(opt$filename, '\\.')[[1]], -1),
+                     collapse='', sep='')
 
 data <- read.csv(opt$filename)
 data <- data %>%
@@ -102,6 +107,12 @@ data$d2I3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI3Rms, n)
 # The value of the 2nd derivative are NA's in the last two rows.
 #
 data <- data[1:(nrow(data) - 2),]
+
+write.csv(data, paste(name_prefix, '-processed.csv', sep=''), row.names=FALSE)
+
+if (opt$'no-plot') {
+    quit()
+}
 
 if (is.null(opt$'zoom-in')) {
     range_spec <- list(c(min(data$Time), max(data$Time)))
@@ -197,9 +208,7 @@ plots <- lapply(range_spec, plot_by_range, data=data)
 sizes <- lapply(range_spec, calc_data_size, data=data)
 lapply(1:length(range_spec), save_by_index, plots=plots, range_spec=range_spec,
        sizes=sizes,
-       prefix=paste(
-                    head(str_split(opt$filename, '\\.')[[1]], -1),
-                    '-', collapse='', sep='')
+       prefix=paste(name_prefix, '-', sep='')
 )
 
 # Below method saves to a multi-page PDF file, but the file is too slow to open
