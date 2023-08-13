@@ -13,6 +13,8 @@ USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
 SAMPLES_PER_PERIOD <- 128
 RATE <- 6.4e3
+PAGE_W <- 8.268
+PAGE_H <- 11.693
 
 options(max.print=60 * RATE)
 
@@ -131,12 +133,13 @@ plot_by_range <- function(range, data) {
         lab <- sub("^00:", "", lab) # Remove leading 00: if present
     }
 
-    plot <- function(data) {
+    plot <- function(data, ymin, ymax) {
         ggplot(data, aes(x=Time, y=value, color=variable)) +
             geom_line() +
             scale_color_manual(values = c('orange', 'blue')) +
             labs(y='Voltage/Current') +
             scale_x_continuous(name='Time', labels=timeHMS_formatter) +
+            ylim(ymin, ymax) +
             theme_bw() +
             theme(legend.position='none',
                   panel.background = element_rect(fill = "cornsilk", colour = NA),
@@ -150,24 +153,24 @@ plot_by_range <- function(range, data) {
             plot(melt(data[, c('Time',
                                paste('U', phase, 'Scaled', sep=''),
                                paste('I', phase, 'Scaled', sep=''))
-                          ], id = c('Time')))
+                          ], id = c('Time')), ymin=-350, ymax=350)
         })
     rms_plots <- lapply(1:3, function(phase) {
             plot(melt(data[, c('Time',
                                 paste('U', phase, 'Rms', sep=''),
                                 paste('I', phase, 'Rms', sep=''))
-                          ], id = c('Time')))
+                          ], id = c('Time')), ymin=0, ymax=250)
         })
-    d2rms_plots <- lapply(1:3, function(phase) {
-            plot(melt(data[, c('Time',
-                                paste('d2U', phase, 'Rms', sep=''),
-                                paste('d2I', phase, 'Rms', sep=''))
-                          ], id = c('Time')))
-        })
+    #d2rms_plots <- lapply(1:3, function(phase) {
+    #        plot(melt(data[, c('Time',
+    #                            paste('d2U', phase, 'Rms', sep=''),
+    #                            paste('d2I', phase, 'Rms', sep=''))
+    #                      ], id = c('Time')))
+    #    })
 
     inst_row <- plot_grid(inst_plots[[1]], inst_plots[[2]], inst_plots[[3]], ncol=3)
     rms_row <- plot_grid(rms_plots[[1]], rms_plots[[2]], rms_plots[[3]], ncol=3)
-    d2rms_row <- plot_grid(d2rms_plots[[1]], d2rms_plots[[2]], d2rms_plots[[3]], ncol=3)
+    #d2rms_row <- plot_grid(d2rms_plots[[1]], d2rms_plots[[2]], d2rms_plots[[3]], ncol=3)
 
     inst_title <- ggdraw() + 
         draw_label('Instantaneous', fontface = 'bold', x = 0, hjust = 0) +
@@ -179,13 +182,15 @@ plot_by_range <- function(range, data) {
         theme(plot.margin = margin(0, 0, 0, 7),
               plot.background = element_rect(fill = "cornsilk", color = NA)
         )
-    d2rms_title <- ggdraw() + 
-        draw_label(expression(d^2 ~ RMS), fontface = 'bold', x = 0, hjust = 0) +
-        theme(plot.margin = margin(0, 0, 0, 7),
-              plot.background = element_rect(fill = "cornsilk", color = NA)
-        )
-    plot_grid(inst_title, inst_row, rms_title, rms_row, d2rms_title, d2rms_row,
-              ncol=1, rel_heights=c(.03, .3, .03, .3, .03, .3))
+    #d2rms_title <- ggdraw() + 
+    #    draw_label(expression(d^2 ~ RMS), fontface = 'bold', x = 0, hjust = 0) +
+    #    theme(plot.margin = margin(0, 0, 0, 7),
+    #          plot.background = element_rect(fill = "cornsilk", color = NA)
+    #    )
+    plot_grid(inst_title, inst_row,
+              rms_title, rms_row,
+              #d2rms_title, d2rms_row,
+              ncol=1, rel_heights=c(.05, .45, .05, .45))
 }
 
 calc_data_size <- function(range, data) {
@@ -195,12 +200,12 @@ calc_data_size <- function(range, data) {
 save_by_index <- function(n, plots, range_spec, sizes, prefix) {
     name <- paste(prefix, range_spec[[n]][1], '-', range_spec[[n]][2], sep='')
     ggsave(paste(name, '.png', sep=''), plots[[n]],
-           width=11.7, height=8.3, dpi=600)
+           width=PAGE_H, height=PAGE_W, dpi=400)
     if (sizes[[n]] <= 20e3) {
         ggsave(paste(name, '.pdf', sep=''), plots[[n]],
-               width=11.7, height=8.3)
+               width=PAGE_H, height=PAGE_W)
         ggsave(paste(name, '.svg', sep=''), plots[[n]],
-               width=11.7, height=8.3)
+               width=PAGE_H, height=PAGE_W)
     }
 }
 
