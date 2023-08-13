@@ -23,7 +23,7 @@ option_list = list(
     make_option(c('-z', '--zoom-in'), type='character',
                 help='zooom-in sectons in secs, e.g., 195-199.5,301.5-305.2'),
     make_option(c('-P', '--no-plot'), action='store_true', default=FALSE,
-                help='not to plot, only save processed data')
+                help='not to plot')
 )
  
 opt_parser = OptionParser(option_list=option_list)
@@ -110,8 +110,6 @@ data$d2I3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI3Rms, n)
 #
 data <- data[1:(nrow(data) - 2),]
 
-write.csv(data, paste(name_prefix, '-processed.csv', sep=''), row.names=FALSE)
-
 if (opt$'no-plot') {
     quit()
 }
@@ -148,6 +146,8 @@ plot_by_range <- function(range, data) {
     }
 
     data <- data %>% filter(Time >= range[1] & Time <= range[2])
+    write.csv(data, paste(name_prefix, '-', range[1], '-', range[2],
+                          '-processed.csv', sep=''), row.names=FALSE)
 
     inst_plots <- lapply(1:3, function(phase) {
             plot(melt(data[, c('Time',
