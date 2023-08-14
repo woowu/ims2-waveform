@@ -11,6 +11,7 @@ import yargs from 'yargs/yargs';
 import dump from 'buffer-hexdump';
 import moment from 'moment';
 
+const WF_SAMPLE_RATE = 6.4e3;
 const WF_FRAME_SYNC = 0xa5;
 const WF_FRAME_HEAD_LEN = 1;
 const WF_FRAME_PAYLOAD_LEN = (2 + 2) * 3; /* u/i from 3 channels */
@@ -30,8 +31,8 @@ function putData(workpad, data)
 
 function parseStream(workpad, ws)
 {
-    const handleFrame = (frame, frameCount) => {
-        console.log(frameCount + ':', dump(frame).slice(10, 10 + 2*15 + 7));
+    const handleFrame = (frame, frameCounter) => {
+        console.log(frameCounter + ':', dump(frame).slice(10, 10 + 2*15 + 7));
         var cs = [0, 0];
         var i = 0;
         for (const b of frame.slice(WF_FRAME_HEAD_LEN
@@ -41,12 +42,13 @@ function parseStream(workpad, ws)
         }
         if (cs[0] != frame[WF_FRAME_HEAD_LEN + WF_FRAME_PAYLOAD_LEN]
             || cs[1] != frame[WF_FRAME_HEAD_LEN + WF_FRAME_PAYLOAD_LEN + 1]) {
-            console.log('bad frame: ', frameCount);
-            return;
+            console.log('bad frame: ', frameCounter);
+            return false;
         }
 
-        if (! ws) return;
-        ws.write(`${frameCount},${moment(workpad.timestamp).format('YYYY-MM-DD HH:mm:ss.SSS')}`);
+        if (! ws) return true;
+        ws.write(`${frameCounter * (1/WF_SAMPLE_RATE)},`
+            + `${moment(workpad.timestamp).format('YYYY-MM-DD HH:mm:ss.SSS')}`);
         var pos = WF_FRAME_HEAD_LEN;
         var value;
         for (var channel = 0; channel < 3; ++channel) {
@@ -59,26 +61,37 @@ function parseStream(workpad, ws)
             }
         }
         ws.write('\n');
+        return true;
     };
 
     const parsePayload = payload => {
-        console.log(moment(workpad.timestamp).format('YYYY-MM-DD HH:mm:ss.SSS'));
-
         const data = [...workpad.remainingPayload, ...payload];
         var pos = 0;
 
-        /* try sync to the next frame head if we have some lost
-         * in the raw waveform streaming data.
+        /* Here only try to parse whole frames, for last incompleted
+         * frame, leave it for the next message.
          */
-        while (data[pos] != WF_FRAME_SYNC) ++pos;
-        if (pos) console.warn(`skipped ${pos} bytes in stream`);
-
+        var last_success = true;
+        var last_successful_pos = 0;
         while (data.length - pos >= WF_FRAME_LEN) {
-            handleFrame(data.slice(pos, pos + WF_FRAME_LEN)
-                , workpad.frameCount++);
-            pos += WF_FRAME_LEN;
+            if (data[pos] == WF_FRAME_SYNC && handleFrame(
+                data.slice(pos, pos + WF_FRAME_LEN), workpad.frameCounter)) {
+                pos += WF_FRAME_LEN;
+                last_successful_pos = pos;
+                ++workpad.frameCounter;
+            } else {
+                ++pos;
+                /* all the continuous not-consumed bytes are counted as a
+                 * single bad frame, which should occupy a counter.
+                 */
+                if (last_success) {
+                    ++workpad.frameCounter;
+                    last_success = false;
+                }
+            }
         }
-        workpad.remainingPayload = data.slice(pos);
+        workpad.remainingPayload = last_successful_pos
+            ? data.slice(last_successful_pos) : [];
     };
 
     /* parse and strip a whole message, otherwise keep the stream
@@ -98,14 +111,18 @@ function parseStream(workpad, ws)
         .getUint32(0)
     if (workpad.instream.length < MESSAGE_HEAD_LEN + payloadLen) return;
 
+    if (workpad.messageSeqno === null) workpad.messageSeqno = messageSeqno;
     console.log('seq', messageSeqno, 'payload len', payloadLen);
+    if (messageSeqno != workpad.messageSeqno)
+        throw new Error(`incorrect message seqno. received ${messageSeqno}` +
+            ` expected ${workpad.messageSeqno}`)
     workpad.timestamp = new Date(Number(new DataView(
         new Uint8Array(workpad.instream.slice(MESSAGE_START_LEN + MESSAGE_SEQNO_LEN
             , MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN)).buffer)
         .getBigInt64()))
     const payload = workpad.instream.slice(MESSAGE_HEAD_LEN, MESSAGE_HEAD_LEN + payloadLen);
     workpad.instream = workpad.instream.slice(MESSAGE_HEAD_LEN + payloadLen);
-    ++workpad.messageCount;
+    ++workpad.messageSeqno;
     parsePayload(payload);
 }
 
@@ -139,15 +156,15 @@ const workpad = {
     instream: [],
     timestamp: null,
     remainingPayload: [],
-    messageCount: 0,
-    frameCount: 0,
+    messageSeqno: null,
+    frameCounter: 0,
 }
 const client = new net.Socket();
 var recvCnt = 0;
 var ws = null;
 if (argv.csv) {
     ws = fs.createWriteStream(argv.csv);
-    ws.write('Seqno,Time,U1,I1,U2,I2,U3,I3\n');
+    ws.write('Time,RecvTime,U1,I1,U2,I2,U3,I3\n');
 }
 
 client.connect(argv.port, argv.host, () => {
@@ -158,10 +175,14 @@ client.on('close', () => {
     console.log('connection closed');
 });
 client.on('data', data => {
-    putData(workpad, data);
-    parseStream(workpad, ws);
-    if (argv.frames && workpad.frameCount >= argv.frames) {
+    try {
+        putData(workpad, data);
+        parseStream(workpad, ws);
+        if (argv.frames && workpad.frameCounter >= argv.frames)
+            client.end();
+    } catch (e) {
+        if (ws) ws.end();
         client.end();
-        return;
+        throw e;
     }
 });

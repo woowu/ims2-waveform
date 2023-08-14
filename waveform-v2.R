@@ -44,8 +44,7 @@ data <- data %>%
     mutate(U2Scaled = U2 * USCALE) %>%
     mutate(I2Scaled = I2 * ISCALE) %>%
     mutate(U3Scaled = U3 * USCALE) %>%
-    mutate(I3Scaled = I3 * ISCALE) %>%
-    mutate(Time = Seqno * (1/RATE))
+    mutate(I3Scaled = I3 * ISCALE)
 
 # If I don't have a full period to work with, just
 # return NA values which can then be excluded later.
