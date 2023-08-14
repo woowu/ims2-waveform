@@ -23,7 +23,9 @@ option_list = list(
     make_option(c('-z', '--zoom-in'), type='character',
                 help='zooom-in sectons in secs, e.g., 195-199.5,301.5-305.2'),
     make_option(c('-P', '--no-plot'), action='store_true', default=FALSE,
-                help='not to plot')
+                help='not to plot'),
+    make_option(c('-p', '--phase'), type='numeric', default=NULL,
+                help='select a single phase')
 )
  
 opt_parser = OptionParser(option_list=option_list)
@@ -35,7 +37,9 @@ if (is.null(opt$filename)) {
 }
 
 name_prefix <- paste(head(str_split(opt$filename, '\\.')[[1]], -1),
-                     collapse='', sep='')
+                     collapse='.')
+if (! is.null(opt$phase))
+    name_prefix <- paste(name_prefix, '-p', opt$phase, sep='')
 
 data <- read.csv(opt$filename)
 data <- data %>%
@@ -121,7 +125,7 @@ if (is.null(opt$'zoom-in')) {
                as.numeric)
 }
 
-plot_by_range <- function(range, data) {
+plot_by_range <- function(range, data, phase) {
     timeHMS_formatter <- function(s) {
         h <- floor(s/3600)
         m <- floor((s/60) %% 60)
@@ -148,28 +152,39 @@ plot_by_range <- function(range, data) {
     write.csv(data, paste(name_prefix, '-', range[1], '-', range[2],
                           '-processed.csv', sep=''), row.names=FALSE)
 
-    inst_plots <- lapply(1:3, function(phase) {
+    if (is.null(phase)) {
+        phases <- 1:3
+    } else {
+        phases <-phase:phase
+    }
+    inst_plots <- lapply(phases, function(phase) {
             plot(melt(data[, c('Time',
                                paste('U', phase, 'Scaled', sep=''),
                                paste('I', phase, 'Scaled', sep=''))
                           ], id = c('Time')), ymin=-350, ymax=350)
         })
-    rms_plots <- lapply(1:3, function(phase) {
+    rms_plots <- lapply(phases, function(phase) {
             plot(melt(data[, c('Time',
                                 paste('U', phase, 'Rms', sep=''),
                                 paste('I', phase, 'Rms', sep=''))
                           ], id = c('Time')), ymin=0, ymax=250)
         })
-    #d2rms_plots <- lapply(1:3, function(phase) {
+    #d2rms_plots <- lapply(phases, function(phase) {
     #        plot(melt(data[, c('Time',
     #                            paste('d2U', phase, 'Rms', sep=''),
     #                            paste('d2I', phase, 'Rms', sep=''))
     #                      ], id = c('Time')))
     #    })
 
-    inst_row <- plot_grid(inst_plots[[1]], inst_plots[[2]], inst_plots[[3]], ncol=3)
-    rms_row <- plot_grid(rms_plots[[1]], rms_plots[[2]], rms_plots[[3]], ncol=3)
-    #d2rms_row <- plot_grid(d2rms_plots[[1]], d2rms_plots[[2]], d2rms_plots[[3]], ncol=3)
+    if (is.null(phase)) {
+        inst_row <- plot_grid(inst_plots[[1]], inst_plots[[2]], inst_plots[[3]], ncol=3)
+        rms_row <- plot_grid(rms_plots[[1]], rms_plots[[2]], rms_plots[[3]], ncol=3)
+        #d2rms_row <- plot_grid(d2rms_plots[[1]], d2rms_plots[[2]], d2rms_plots[[3]], ncol=3)
+    } else {
+        inst_row <- plot_grid(inst_plots[[1]], ncol=1)
+        rms_row <- plot_grid(rms_plots[[1]], ncol=1)
+        #d2rms_row <- plot_grid(d2rms_plots[[1]], ncol=1)
+    }
 
     inst_title <- ggdraw() + 
         draw_label('Instantaneous', fontface = 'bold', x = 0, hjust = 0) +
@@ -208,7 +223,7 @@ save_by_index <- function(n, plots, range_spec, sizes, prefix) {
     }
 }
 
-plots <- lapply(range_spec, plot_by_range, data=data)
+plots <- lapply(range_spec, plot_by_range, data=data, phase=opt$phase)
 sizes <- lapply(range_spec, calc_data_size, data=data)
 lapply(1:length(range_spec), save_by_index, plots=plots, range_spec=range_spec,
        sizes=sizes,

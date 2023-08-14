@@ -32,7 +32,7 @@ function putData(workpad, data)
 function parseStream(workpad, ws)
 {
     const handleFrame = (frame, frameCounter) => {
-        console.log(frameCounter + ':', dump(frame).slice(10, 10 + 2*15 + 7));
+        //console.log(frameCounter + ':', dump(frame).slice(10, 10 + 2*15 + 7));
         var cs = [0, 0];
         var i = 0;
         for (const b of frame.slice(WF_FRAME_HEAD_LEN
