@@ -112,7 +112,6 @@ function parseStream(workpad, ws)
     if (workpad.instream.length < MESSAGE_HEAD_LEN + payloadLen) return;
 
     if (workpad.messageSeqno === null) workpad.messageSeqno = messageSeqno;
-    console.log('seq', messageSeqno, 'payload len', payloadLen);
     if (messageSeqno != workpad.messageSeqno)
         throw new Error(`incorrect message seqno. received ${messageSeqno}` +
             ` expected ${workpad.messageSeqno}`)
@@ -121,6 +120,7 @@ function parseStream(workpad, ws)
             , MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN)).buffer)
         .getBigInt64()))
     const payload = workpad.instream.slice(MESSAGE_HEAD_LEN, MESSAGE_HEAD_LEN + payloadLen);
+    workpad.messagePrinter(messageSeqno, payload, workpad.frameCounter);
     workpad.instream = workpad.instream.slice(MESSAGE_HEAD_LEN + payloadLen);
     ++workpad.messageSeqno;
     parsePayload(payload);
@@ -158,6 +158,16 @@ const workpad = {
     remainingPayload: [],
     messageSeqno: null,
     frameCounter: 0,
+    messagePrinter: (function useMessagePrinter(threshold) {
+        var counter = 0;
+        return (seqno, payload, frameCounter) => {
+            if (++counter == threshold) {
+                console.log('seq', seqno, 'payload len', payload.length,
+                    'recved frames:', frameCounter);
+                counter = 0;
+            }
+        };
+    })(10),
 }
 const client = new net.Socket();
 var recvCnt = 0;
