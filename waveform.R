@@ -58,8 +58,10 @@ data <- data %>%
 # return NA values which can then be excluded later.
 #
 rms <- function(v, n) {
-    ifelse(n < SAMPLES_PER_PERIOD, NA,
-           sqrt(sum((v[max(1, n-127):n])^2)/SAMPLES_PER_PERIOD))
+    if (n < SAMPLES_PER_PERIOD)
+        return(NA)
+    else
+        return(sqrt(sum((v[max(1, n-127):n])^2)/SAMPLES_PER_PERIOD))
 }
 
 # RMS values are calculated from the previous whole period
@@ -83,15 +85,15 @@ data$I1RmsLowPass <- pass.filt(data$I1Rms, W=0.2, type='low', method='Butterwort
 data$I2RmsLowPass <- pass.filt(data$I2Rms, W=0.2, type='low', method='Butterworth')
 data$I3RmsLowPass <- pass.filt(data$I3Rms, W=0.2, type='low', method='Butterworth')
 
-# The 'diff' function was commented out because the derivatives
-# were not used now.
-#
 # A function repsented as two vectors x and y. 'diff' calculate the derivative
 # of the function.
 #
-#diff <- function(x, y, n) {
-#    ifelse(length(y) > n, (y[n + 1] - y[n])/(x[n + 1] - x[n]), NA)
-#}
+diff <- function(x, y, n) {
+    if (length(y) > n)
+        return((y[n + 1] - y[n])/(x[n + 1] - x[n]))
+    else
+        return(NA)
+}
 
 # Drivatives calulation were commented out because the plotting
 # of them are not used now.
@@ -121,11 +123,13 @@ if (opt$'no-plot') {
     quit()
 }
 
-range_spec <- ifelse(is.null(opt$'zoom-in'),
-                     list(c(min(data$Time), max(data$Time))),
-                     lapply(
-                            str_split(str_split(opt$'zoom-in', ',')[[1]], '-'),
-                            as.numeric)
+if (is.null(opt$'zoom-in')) {
+    range_spec <- list(c(min(data$Time), max(data$Time)))
+} else {
+    range_spec <- lapply(
+               str_split(str_split(opt$'zoom-in', ',')[[1]], '-'),
+               as.numeric)
+}
 
 plot_by_range <- function(range, data, phase) {
     timeHMS_formatter <- function(s) {
@@ -154,7 +158,11 @@ plot_by_range <- function(range, data, phase) {
     write.csv(data, paste(name_prefix, '-', range[1], '-', range[2],
                           '-processed.csv', sep=''), row.names=FALSE)
 
-    phases <- ifelse(is.null(phase), 1:3, phase:phase)
+    if (is.null(phase)) {
+        phases <- 1:3
+    } else {
+        phases <-phase:phase
+    }
     inst_plots <- lapply(phases, function(phase) {
             plot(melt(data[, c('Time',
                                paste('U', phase, 'Scaled', sep=''),
