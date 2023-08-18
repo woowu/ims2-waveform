@@ -1,10 +1,11 @@
+#!/usr/bin/Rscript --vanilla
+
 # After received IMS waveform data were saved in a csv file, this script do
 # plotting of data to show actual waveforms and RMS values of data samples.
 # From a big csv file, the script also provides options do a cut (zoom) on a
 # group of the specified ranges of data.
 #
 
-#!/usr/bin/Rscript --vanilla
 library(optparse)
 library(dplyr)
 library(tidyverse)
