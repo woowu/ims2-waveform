@@ -1,3 +1,9 @@
+# After received IMS waveform data were saved in a csv file, this script do
+# plotting of data to show actual waveforms and RMS values of data samples.
+# From a big csv file, the script also provides options do a cut (zoom) on a
+# group of the specified ranges of data.
+#
+
 #!/usr/bin/Rscript --vanilla
 library(optparse)
 library(dplyr)
@@ -7,8 +13,6 @@ library(reshape2)
 library(ggplot2)
 library(cowplot)
 
-#USCALE <- 2.15372e-2
-#ISCALE <- 4.60236e-3
 USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
 SAMPLES_PER_PERIOD <- 128
@@ -231,10 +235,3 @@ lapply(1:length(range_spec), save_by_index, plots=plots, range_spec=range_spec,
        sizes=sizes,
        prefix=paste(name_prefix, '-', sep='')
 )
-
-# Below method saves to a multi-page PDF file, but the file is too slow to open
-# when the number of points is huge.
-#
-#pdf('plots.pdf', width=16.5, height=11.7)
-#plots
-#dev.off()
