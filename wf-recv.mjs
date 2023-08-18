@@ -5,7 +5,9 @@
  *   0x3e | seqno | 64bit timestamp | 32 bit len | waveform chunk
  */
 
+import path from 'node:path';
 import fs from 'node:fs';
+import { exec } from 'node:child_process';
 import net from 'node:net';
 import yargs from 'yargs/yargs';
 import dump from 'buffer-hexdump';
@@ -23,6 +25,8 @@ const MESSAGE_SEQNO_LEN = 4;
 const MESSAGE_TIMESTAMP_LEN = 8;
 const MESSAGE_LEN_SZ = 4;
 const MESSAGE_HEAD_LEN = MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN + MESSAGE_LEN_SZ;
+const MAX_ROWS_EACH_FILE = 1e6;
+const FILE_HANDLER = 'wf-overview.R';
 
 function putData(workpad, data)
 {
@@ -46,9 +50,8 @@ function parseStream(workpad, ws)
             return false;
         }
 
-        if (! ws) return true;
-        ws.write(`${frameCounter * (1/WF_SAMPLE_RATE)},`
-            + `${moment(workpad.timestamp).format('YYYY-MM-DD HH:mm:ss.SSS')}`);
+        const line = `${frameCounter * (1/WF_SAMPLE_RATE)},`
+            + `${moment(workpad.timestamp).format('YYYY-MM-DD HH:mm:ss.SSS')}`;
         var pos = WF_FRAME_HEAD_LEN;
         var value;
         for (var channel = 0; channel < 3; ++channel) {
@@ -56,11 +59,11 @@ function parseStream(workpad, ws)
                 value = new DataView(new Uint8Array(
                     frame.slice(pos, pos + 2)
                 ).buffer).getInt16(0, true);
-                ws.write(',' + value);
+                line += ',' + value;
                 pos += 2;
             }
         }
-        ws.write('\n');
+        writeCsvRow(line, workpad.csvInfo, workpad.execDir);
         return true;
     };
 
@@ -153,6 +156,7 @@ const argv = yargs(process.argv.slice(2))
     }).argv;
 
 const workpad = {
+    execDir: path.dirname(process.argv[1]),
     instream: [],
     timestamp: null,
     remainingPayload: [],
@@ -168,30 +172,85 @@ const workpad = {
             }
         };
     })(10),
+    csvInfo: null,
 }
+
+if (argv.csv) {
+    const { dir, name, ext } = path.parse(argv.csv);
+    workpad.csvInfo = {
+        dir,
+        name,
+        ext,
+        fileCounter: 0,
+        rowsCounter: 0,
+        header: 'Time,RecvTime,U1,I1,U2,I2,U3,I3',
+        ws: null,
+    };
+}
+
+function writeCsvRow(row, csvInfo, execDir)
+{
+    const nameNextFilename = () => {
+        return path.join(csvInfo.dir,
+            [
+                csvInfo.name, '-',
+                (++csvInfo.fileCounter).toString().padStart(5, '0'),
+                csvInfo.ext,
+            ].join(''));
+    };
+    const newFile = () => {
+        const filename = makeNextFilename();
+        csvInfo.ws = fs.createWriteStream(filename);
+        csvInfo.ws.write(csvInfo.header + '\n');
+        csvInfo.rowCounter = 0;
+        return filename;
+    };
+    const dispatchFile = filename => {
+        const handlerFilename = path.join(execDir, FILE_HANDLER);
+        console.log(`send ${filename} to ${handlerFilename}`);
+        exec(`${handlerFilename} -f ${filename}`, (error, stdout, stderr) => {
+            if (error)
+                console.error(`dispatch ${filename} error: ${error}`);
+            if (stderr)
+                console.error(`exec ${filename} error: ${stderr}`);
+        });
+    };
+
+    if (! csvInfo) return;
+    if (! csvInfo.ws)
+        csvInfo.filename = newFile();
+    if (csvInfo.rowCounter == MAX_ROWS_EACH_FILE) {
+        csvInfo.ws.end();
+        csvInfo.filename = newFile();
+    }
+    csvInfo.ws.write(row);
+    ++csvInfo.rowCounter;
+}
+
+function endCsv(csvInfo)
+{
+    if (csvInfo && csvInfo.ws)
+        ws.end();
+}
+
 const client = new net.Socket();
 var recvCnt = 0;
-var ws = null;
-if (argv.csv) {
-    ws = fs.createWriteStream(argv.csv);
-    ws.write('Time,RecvTime,U1,I1,U2,I2,U3,I3\n');
-}
 
 client.connect(argv.port, argv.host, () => {
     console.log('connected');
 });
 client.on('close', () => {
-    if (ws) ws.end();
+    endCsv(workpad.csvInfo);
     console.log('connection closed');
 });
 client.on('data', data => {
     try {
         putData(workpad, data);
-        parseStream(workpad, ws);
+        parseStream(workpad);
         if (argv.frames && workpad.frameCounter >= argv.frames)
             client.end();
     } catch (e) {
-        if (ws) ws.end();
+        workpad.endCsv();
         client.end();
         throw e;
     }

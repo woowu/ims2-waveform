@@ -91,23 +91,25 @@ diff <- function(x, y, n) {
         return(NA)
 }
 
+# Drivatives calulation were commented out because the plotting
+# of them are not used now.
+#
 # Derivatives of Rms low-pass'ed
 #
-data$dU1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U1RmsLowPass, n))
-data$dU2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U2RmsLowPass, n))
-data$dU3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U3RmsLowPass, n))
-data$dI1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I1RmsLowPass, n))
-data$dI2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I2RmsLowPass, n))
-data$dI3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I3RmsLowPass, n))
-
+#data$dU1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U1RmsLowPass, n))
+#data$dU2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U2RmsLowPass, n))
+#data$dU3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$U3RmsLowPass, n))
+#data$dI1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I1RmsLowPass, n))
+#data$dI2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I2RmsLowPass, n))
+#data$dI3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$I3RmsLowPass, n))
 # The 2nd Derivatives
 #
-data$d2U1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU1Rms, n))
-data$d2U2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU2Rms, n))
-data$d2U3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU3Rms, n))
-data$d2I1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI1Rms, n))
-data$d2I2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI2Rms, n))
-data$d2I3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI3Rms, n))
+#data$d2U1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU1Rms, n))
+#data$d2U2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU2Rms, n))
+#data$d2U3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dU3Rms, n))
+#data$d2I1Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI1Rms, n))
+#data$d2I2Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI2Rms, n))
+#data$d2I3Rms <- sapply(1:nrow(data), function(n) diff(data$Time, data$dI3Rms, n))
 
 # The value of the 2nd derivative are NA's in the last two rows.
 #
