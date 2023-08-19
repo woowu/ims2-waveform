@@ -50,7 +50,7 @@ function parseStream(workpad, ws)
             return false;
         }
 
-        const line = `${frameCounter * (1/WF_SAMPLE_RATE)},`
+        var line = `${frameCounter * (1/WF_SAMPLE_RATE)},`
             + `${moment(workpad.timestamp).format('YYYY-MM-DD HH:mm:ss.SSS')}`;
         var pos = WF_FRAME_HEAD_LEN;
         var value;
@@ -190,7 +190,7 @@ if (argv.csv) {
 
 function writeCsvRow(row, csvInfo, execDir)
 {
-    const nameNextFilename = () => {
+    const makeNextFilename = () => {
         return path.join(csvInfo.dir,
             [
                 csvInfo.name, '-',
@@ -223,7 +223,7 @@ function writeCsvRow(row, csvInfo, execDir)
         csvInfo.ws.end();
         csvInfo.filename = newFile();
     }
-    csvInfo.ws.write(row);
+    csvInfo.ws.write(row + '\n');
     ++csvInfo.rowCounter;
 }
 
@@ -250,7 +250,7 @@ client.on('data', data => {
         if (argv.frames && workpad.frameCounter >= argv.frames)
             client.end();
     } catch (e) {
-        workpad.endCsv();
+        endCsv(workpad.csvInfo);
         client.end();
         throw e;
     }
