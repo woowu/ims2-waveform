@@ -3,6 +3,30 @@ ISCALE <- 4.61806e-3
 RATE <- 6.4e3
 SAMPLES_PER_PERIOD <- 128
 
+# If I don't have a full period to work with, just
+# return NA values which can then be excluded later.
+#
+rms <- function(v, n) {
+    if (n < SAMPLES_PER_PERIOD)
+        return(NA)
+    else
+        return(sqrt(sum((v[max(1, n-127):n])^2)/SAMPLES_PER_PERIOD))
+}
+
+# Create a data from from a time and instantaneous vector, replacing the
+# instantaneous vector to a rms vector. time and v should have same length and
+# must greater than SAMPLES_PER_PERIOD
+#
+rms_df <- function(time, v) {
+    d <- data.frame(
+               Time = time,
+               Rms = sapply(1:length(time), function(n) rms(v, n))
+               )
+    # RMS values at the first SAMPLES_PER_PERIOD samples are NA's
+    #
+    d[SAMPLES_PER_PERIOD:nrow(d),]
+}
+
 # The ims waveform original data is in 'data', the 'plot_ui()' function plot
 # voltage and current for a given time interval.
 #
