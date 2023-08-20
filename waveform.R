@@ -7,7 +7,6 @@
 #
 
 library(optparse)
-library(dplyr)
 library(tidyverse)
 library(dplR)
 library(reshape2)
@@ -41,10 +40,9 @@ if (is.null(opt$filename)) {
     stop('no csv filename provided')
 }
 
-name_prefix <- paste(head(str_split(opt$filename, '\\.')[[1]], -1),
-                     collapse='.')
+namebase <- sub('\\.[[:alnum:]]+$', '', basename(opt$filename))
 if (! is.null(opt$phase))
-    name_prefix <- paste(name_prefix, '-p', opt$phase, sep='')
+    namebase <- paste(namebase, '-p', opt$phase, sep='')
 
 data <- read.csv(opt$filename)
 data <- data %>%
@@ -123,7 +121,7 @@ plot_by_range <- function(range, data, phase) {
     }
 
     data <- data %>% filter(Time >= range[1] & Time <= range[2])
-    write.csv(data, paste(name_prefix, '-', range[1], '-', range[2],
+    write.csv(data, paste(namebase, '-', range[1], '-', range[2],
                           '-processed.csv', sep=''), row.names=FALSE)
 
     if (is.null(phase)) {
@@ -190,5 +188,5 @@ plots <- lapply(range_spec, plot_by_range, data=data, phase=opt$phase)
 sizes <- lapply(range_spec, calc_data_size, data=data)
 lapply(1:length(range_spec), save_by_index, plots=plots, range_spec=range_spec,
        sizes=sizes,
-       prefix=paste(name_prefix, '-', sep='')
+       prefix=paste(namebase, '-', sep='')
 )
