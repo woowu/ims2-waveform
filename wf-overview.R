@@ -1,11 +1,14 @@
 #!/usr/bin/Rscript --vanilla
 library(optparse)
+library(dplyr)
 
 USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
 
 option_list = list(
-    make_option(c('-f', '--filename'), type='character', help='cvs filename')
+    make_option(c('-f', '--filename'), type='character', help='cvs filename'),
+    make_option(c('-p', '--phase'), type='numeric', default=NULL,
+                help='select a single phase')
 )
  
 opt_parser = OptionParser(option_list=option_list)
@@ -16,13 +19,27 @@ if (is.null(opt$filename)) {
     stop('no csv filename provided')
 }
 
+source('~/R/local-script/ac-tools.R')
 namebase <- sub('\\.[[:alnum:]]+$', '', basename(opt$filename))
+data <- load_wf(opt$filename)
 
-data <- read.csv(opt$filename)
-svg(paste(namebase, '-hist.svg', sep=''))
-par(mfrow=c(2, 3))
-sapply(1:3, function(n) hist(data[, paste('U', n, sep='')] * USCALE,
-                             main=paste('U', n, sep=''))) 
-sapply(1:3, function(n) hist(data[, paste('I', n, sep='')] * ISCALE,
-                             main=paste('I', n, sep=''))) 
-dev.off()
+each_phase <- function(n) {
+    ri <- rms_df(data$Time, data[, paste('I', n, 'Scaled', sep='')])
+    ru <- rms_df(data$Time, data[, paste('U', n, 'Scaled', sep='')])
+    p <- function() {
+        par(bg='cornsilk', mfrow=c(2, 1))
+        hist(ru$Rms, main='', xlab=paste('U', n, ' RMS', sep=''))
+        hist(ri$Rms, main='', xlab=paste('I', n, ' RMS', sep=''))
+    }
+    save_plot(p, name=paste(namebase, '-l', n, '-rms-hist', sep=''))
+    p <- function() {
+        par(bg='cornsilk', mfrow=c(2, 1))
+        hist(data[, paste('U', n, 'Scaled', sep='')],
+             main='', xlab=paste('U', n, sep='')) 
+        hist(data[, paste('I', n, 'Scaled', sep='')],
+             main='', xlab=paste('I', n, sep='')) 
+    }
+    save_plot(p, name=paste(namebase, '-l', n, '-inst-hist', sep=''))
+}
+
+sapply(ifelse(is.null(opt$phase), 1:3, opt$phase), function(n) each_phase(n))
