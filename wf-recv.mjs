@@ -50,7 +50,7 @@ function parseStream(workpad)
             return false;
         }
 
-        var line = `${frameCounter * (1/WF_SAMPLE_RATE)},`
+        var line = `${frameCounter},`
             + `${moment(workpad.timestamp).format('YYYY-MM-DD HH:mm:ss.SSS')}`;
         var pos = WF_FRAME_HEAD_LEN;
         var value;
@@ -195,7 +195,7 @@ if (argv.out && ! argv.raw) {
         ext,
         fileCounter: 0,
         rowsCounter: 0,
-        header: 'Time,RecvTime,U1,I1,U2,I2,U3,I3',
+        header: 'Seqno,RecvTime,U1,I1,U2,I2,U3,I3',
     };
 }
 

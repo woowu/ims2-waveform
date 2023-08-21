@@ -78,7 +78,6 @@ read_wf <- function(filename) {
     d <- read.csv(filename)
     if ('Seqno' %in% names(d)) {
         d$Time <- d$Seqno * 1/RATE
-        d <- d[, -1]
     }
     if (! ('U1Scaled' %in% names(d)))
         d %>%
