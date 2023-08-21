@@ -21,7 +21,7 @@ if (is.null(opt$filename)) {
 
 source('~/R/local-script/ac-tools.R')
 namebase <- sub('\\.[[:alnum:]]+$', '', basename(opt$filename))
-data <- load_wf(opt$filename)
+data <- read_wf(opt$filename)
 
 each_phase <- function(n) {
     ri <- rms_df(data$Time, data[, paste('I', n, 'Scaled', sep='')])

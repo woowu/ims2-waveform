@@ -30,7 +30,7 @@ rms_df <- function(time, v) {
 # The ims waveform original data is in 'data', the 'plot_ui()' function plot
 # voltage and current for a given time interval.
 #
-ui_inst <- function(data, t1=NULL, t2=NULL, phase) {
+ui_inst <- function(data, t1=NULL, t2=NULL, phase, type='p') {
     if (! is.null(t1))
         data <- subset(data, Time >= t1)
     if (! is.null(t2))
@@ -38,28 +38,34 @@ ui_inst <- function(data, t1=NULL, t2=NULL, phase) {
     par(bg='cornsilk', mfrow=c(2,length(phase)))
     sapply(phase, function(n) {
                plot(data$Time, data[, paste('U', n, sep='')] * USCALE,
+                    main='',
                     xlab='Time (s)',
                     ylab=paste('U', n, ' (V)', sep=''),
-                    col='orange')
+                    col='orange', type=type)
                }
     )
     sapply(phase, function(n) {
                plot(data$Time, data[, paste('I', n, sep='')] * ISCALE,
+                    main='',
                     xlab='Time (s)',
                     ylab=paste('I', n, ' (A)', sep=''),
-                    col='blue')
+                    col='blue', type=type)
                }
     )
 }
 
-ui_hist <- function(data, phase) { 
-    par(bg='cornsilk', mfrow=c(2,length(phase)))
-    sapply(phase, function(n) hist(data[, paste('U', n, sep='')] * USCALE,
-                                 main=paste('U', n, sep=''),
-                                 xlab='Voltage (V)')) 
-    sapply(phase, function(n) hist(data[, paste('I', n, sep='')] * ISCALE,
-                                   main=paste('I', n, sep=''),
-                                   xlab='Current (A)')) 
+ui_hist <- function(data, t1=NULL, t2=NULL, phase) { 
+    par(bg='cornsilk', mfrow=c(2, length(phase)))
+    sapply(phase, function(n) {
+               hist(data[, paste('U', n, sep='')] * USCALE,
+                    xlab='Voltage (V)', main='')
+               }
+    )
+    sapply(phase, function(n) {
+               hist(data[, paste('I', n, sep='')] * ISCALE,
+                    xlab='Current (A)', main='')
+               }
+    )
 }
 
 cut_time <- function(d, t, ncycles=10, align=.5) {
@@ -68,7 +74,7 @@ cut_time <- function(d, t, ncycles=10, align=.5) {
     subset(d, Time >= intvl[1] & Time <= intvl[2])
 }
 
-load_wf <- function(filename) {
+read_wf <- function(filename) {
     d <- read.csv(filename)
     if ('Seqno' %in% names(d)) {
         d$Time <- d$Seqno * 1/RATE
