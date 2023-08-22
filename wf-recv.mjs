@@ -30,7 +30,13 @@ const FILE_HANDLER = 'wf-overview.R';
 
 function putData(workpad, data)
 {
-    workpad.instream = [...workpad.instream, ...data];
+    workpad.inQueue.push(data);
+    if (! workpad.parsing) {
+        workpad.parsing = true;
+        setImmediate(() => {
+            parseStream(workpad);
+        });
+    }
 }
 
 function parseStream(workpad)
@@ -77,8 +83,9 @@ function parseStream(workpad)
         var last_success = true;
         var last_successful_pos = 0;
         while (data.length - pos >= WF_FRAME_LEN) {
-            if (data[pos] == WF_FRAME_SYNC && handleFrame(
-                data.slice(pos, pos + WF_FRAME_LEN), workpad.frameCounter)) {
+            if (data[pos] == WF_FRAME_SYNC
+                    && handleFrame(data.slice(pos, pos + WF_FRAME_LEN),
+                        workpad.frameCounter)) {
                 pos += WF_FRAME_LEN;
                 last_successful_pos = pos;
                 ++workpad.frameCounter;
@@ -97,36 +104,54 @@ function parseStream(workpad)
             ? data.slice(last_successful_pos) : [];
     };
 
+    const onEnd = () => {
+        workpad.parsing = false;
+        if (workpad.inQueue.length)
+            setImmediate(() => {
+                parseStream(workpad);
+            });
+    };
+
+    workpad.messageStream.push(...workpad.inQueue.shift());
+
     /* parse and strip a whole message, otherwise keep the stream
      * data untouched.
      */
 
-    if (workpad.instream.length < MESSAGE_HEAD_LEN) return;
-    if (workpad.instream[0] != MESSAGE_START) throw new Error('bad message');
+    if (workpad.messageStream.length < MESSAGE_HEAD_LEN) return;
+    if (workpad.messageStream[0] != MESSAGE_START) {
+        console.error(dump(workpad.messageStream).slice(0, 64));
+        throw new Error('bad message');
+    }
     const messageSeqno = new DataView(
-        new Uint8Array(workpad.instream.slice(
+        new Uint8Array(workpad.messageStream.slice(
             MESSAGE_START_LEN, MESSAGE_START_LEN + MESSAGE_SEQNO_LEN)).buffer)
         .getUint32(0)
     const payloadLen = new DataView(
-        new Uint8Array(workpad.instream.slice(
+        new Uint8Array(workpad.messageStream.slice(
             MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN
             , MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN + MESSAGE_LEN_SZ)).buffer)
         .getUint32(0)
-    if (workpad.instream.length < MESSAGE_HEAD_LEN + payloadLen) return;
+    if (workpad.messageStream.length < MESSAGE_HEAD_LEN + payloadLen) {
+        onEnd();
+        return;
+    }
 
     if (workpad.messageSeqno === null) workpad.messageSeqno = messageSeqno;
     if (messageSeqno != workpad.messageSeqno)
         throw new Error(`incorrect message seqno. received ${messageSeqno}` +
             ` expected ${workpad.messageSeqno}`)
     workpad.timestamp = new Date(Number(new DataView(
-        new Uint8Array(workpad.instream.slice(MESSAGE_START_LEN + MESSAGE_SEQNO_LEN
+        new Uint8Array(workpad.messageStream.slice(MESSAGE_START_LEN + MESSAGE_SEQNO_LEN
             , MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN)).buffer)
         .getBigInt64()))
-    const payload = workpad.instream.slice(MESSAGE_HEAD_LEN, MESSAGE_HEAD_LEN + payloadLen);
+    const payload = workpad.messageStream.slice(MESSAGE_HEAD_LEN, MESSAGE_HEAD_LEN + payloadLen);
     workpad.messagePrinter(messageSeqno, payload, workpad.frameCounter);
-    workpad.instream = workpad.instream.slice(MESSAGE_HEAD_LEN + payloadLen);
+    workpad.messageStream = workpad.messageStream.slice(MESSAGE_HEAD_LEN + payloadLen);
     ++workpad.messageSeqno;
     parsePayload(payload);
+
+    onEnd();
 }
 
 const argv = yargs(process.argv.slice(2))
@@ -165,9 +190,11 @@ const argv = yargs(process.argv.slice(2))
 
 const workpad = {
     execDir: path.dirname(process.argv[1]),
-    instream: [],
+    inQueue: [],            // input data queue, in an array of buffers
+    messageStream: [],      // parsing from here messages
+    remainingPayload: [],   // not completed frame inside a message
+    parsing: false,         // message parsing is running
     timestamp: null,
-    remainingPayload: [],
     messageSeqno: null,
     frameCounter: 0,
     messagePrinter: (function useMessagePrinter(threshold) {
@@ -217,11 +244,10 @@ function writeCsvRow(row, workpad)
     const dispatchFile = filename => {
         const handlerFilename = path.join(workpad.execDir, FILE_HANDLER);
         console.log(`send ${filename} to ${handlerFilename}`);
-        exec(`${handlerFilename} -f ${filename}`, (error, stdout, stderr) => {
+        const cmdline = `${handlerFilename} -f ${filename}`;
+        exec(cmdline, (error, stdout, stderr) => {
             if (error)
-                throw new Error(`dispatch ${filename} error: ${error}`);
-            if (stderr)
-                throw new Error(`exec ${filename} error: ${stderr}`);
+                throw new Error(`exec ${cmdline} error: ${error}`);
         });
     };
 
@@ -264,7 +290,6 @@ function handleInData(data)
             return false;
         }
         putData(workpad, data);
-        parseStream(workpad);
         if (argv.frames && workpad.frameCounter >= argv.frames)
             return true;
     } catch (e) {
