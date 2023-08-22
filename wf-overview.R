@@ -24,6 +24,7 @@ namebase <- sub('\\.[[:alnum:]]+$', '', basename(opt$filename))
 data <- read_wf(opt$filename)
 
 each_phase <- function(n) {
+    print(paste('handling phase', n, sep=''))
     ri <- rms_df(data$Time, data[, paste('I', n, 'Scaled', sep='')])
     ru <- rms_df(data$Time, data[, paste('U', n, 'Scaled', sep='')])
     p <- function() {
@@ -42,4 +43,9 @@ each_phase <- function(n) {
     save_plot(p, name=paste(namebase, '-l', n, '-inst-hist', sep=''))
 }
 
-sapply(ifelse(is.null(opt$phase), 1:3, opt$phase), function(n) each_phase(n))
+if (is.null(opt$phase)) {
+    phases <- 1:3
+} else {
+    phases <- opt$phase
+}
+sapply(phases, function(n) each_phase(n))
