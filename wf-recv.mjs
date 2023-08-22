@@ -46,7 +46,7 @@ function parseStream(workpad)
         }
         if (cs[0] != frame[WF_FRAME_HEAD_LEN + WF_FRAME_PAYLOAD_LEN]
             || cs[1] != frame[WF_FRAME_HEAD_LEN + WF_FRAME_PAYLOAD_LEN + 1]) {
-            console.log('bad frame: ', frameCounter);
+            console.error('bad frame: ', frameCounter);
             return false;
         }
 
@@ -133,13 +133,11 @@ const argv = yargs(process.argv.slice(2))
     .option({
         'h': {
             alias: 'host',
-            demandOption: true,
             describe: 'remote host',
             type: 'string',
         },
         'p': {
             alias: 'port',
-            demandOption: true,
             describe: 'remote tcp port',
             type: 'number',
         },
@@ -241,8 +239,10 @@ function writeCsvRow(row, workpad)
 
 function writeRaw(data, workpad)
 {
-    if (! workpad.ws)
-        workpad.ws = fs.createWriteStream(workpad.outFilename);
+    if (! workpad.ws) {
+        workpad.ws = workpad.outfFilename == '-' ? process.stdout
+            : fs.createWriteStream(workpad.outFilename);
+    }
     workpad.ws.write(data);
 }
 
@@ -269,7 +269,6 @@ function handleInData(data)
             return true;
     } catch (e) {
         endOutStream(workpad);
-        client.end();
         throw e;
     }
     return false;
@@ -280,30 +279,36 @@ function useSocketClient()
     const client = new net.Socket();
 
     client.connect(argv.port, argv.host, () => {
-        console.log('connected');
+        console.error('connected');
     });
     client.on('close', () => {
         endOutStream(workpad);
-        console.log('connection closed');
+        console.error('connection closed');
     });
     client.on('data', data => {
-        if (handleInData(data)) client.end();
+        try {
+            if (handleInData(data)) client.end();
+        } catch (e) {
+            client.end();
+            throw(e);
+        }
     });
     return client;
 }
 
-if (argv.host) return useSocketClient();
-
-if (argv.input) {
-    const rs = fs.createReadStream(argv.input)
+if (argv.host)
+    useSocketClient();
+else if (argv.input) {
+    const rs = argv.input == '-' ? process.stdin
+        : fs.createReadStream(argv.input)
     rs.on('close', () => {
         endOutStream(workpad);
-    }
+    });
     rs.on('error', err => {
         endOutStream(workpad);
         throw(err);
-    }
+    })
     rs.on('data', data => {
         if (handleInData(data)) rs.destroy();
-    }
+    })
 }
