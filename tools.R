@@ -44,16 +44,17 @@ rms.reduce <- function(rms, threshold=0) {
     r<- c()
     t <- c() 
     last <- -Inf
+    len <- length(rms$Rms)
 
-    for (i in 1:length(rms$Rms)) {
+    for (i in 1:len) {
         val <- rms$Rms[i]
-        if (is.nan(last * threshold) || abs((val - last)) > last * threshold) {
+        if (i %% floor(len/200) == 0 || is.nan(last * threshold)
+            || abs((val - last)) > last * threshold || i == len) {
             last <- val
             t <- append(t, rms$Time[i])
             r <- append(r, val)
         }
     }
-    print(length(t))
     list(Time = t, Rms = r)
 }
 
@@ -79,11 +80,11 @@ cross.put_next <- function(state, time, value) {
 # @freq.f0 fundamental frequency
 # @threshold only output points when it deviates from the previous one for
 #   the givin threshold value.
-# @return a list of (Time, PhaseDiff). The elements of vector PhaseDiff are in
+# @return a list of (Time, PhaseShift). The elements of vector PhaseShift are in
 #   range of [0, 2pi), which defined as the radian difference between U and I
 #   using I - U.
 #
-phase_ange.calc <- function(ac_signal, freq.f0=50, threshold=0) {
+phase_shift <- function(ac_signal, freq.f0=50, threshold=0) {
     period <- 1/freq.f0
     time <- c()
     phase <- c()
@@ -95,6 +96,10 @@ phase_ange.calc <- function(ac_signal, freq.f0=50, threshold=0) {
         t <- ac_signal$Time[i]
         state.u <- cross.put_next(state.u, t, ac_signal$U[i])
         state.i <- cross.put_next(state.i, t, ac_signal$I[i])
+        #print(paste('t: ', t,
+        #            ' last u: ', state.u$last_value, ' (', state.u$cross_time, ') ',
+        #            ' last i: ', state.i$last_value, ' (', state.i$cross_time, ') ',
+        #            sep=''))
 
         # i is not crossing
         if (is.null(state.i$cross_time) || state.i$cross_time != t)
@@ -108,6 +113,9 @@ phase_ange.calc <- function(ac_signal, freq.f0=50, threshold=0) {
         # at some time ago, we're able to do phase comparing
         diff <- t - state.u$cross_time
 
+        # need wait for a new crossing on U
+        state.u$cross_time <- NULL
+
         # time diff should witin a period, we may lost some
         # samples
         if (diff >= period)
@@ -116,24 +124,25 @@ phase_ange.calc <- function(ac_signal, freq.f0=50, threshold=0) {
         time <- append(time, t)
         phase <- append(phase, (diff/period)*2*pi)
     }
-    li <- list(Time=time, PhaseDiff=phase)
+    li <- list(Time=time, PhaseShift=phase)
     if (threshold == 0)
         return(li)
 
     t <- c()
     p <- c() 
     last <- -Inf 
+    len <- length(li$PhaseShift)
 
-    for (i in 1:length(li$PhaseDiff)) {
-        val <- li$PhaseDiff[i]
+    for (i in 1:len) {
+        val <- li$PhaseShift[i]
         if (val >= pi) val <- -(2*pi - val)
-        if (abs((val - last)) > threshold) {
+        if (i %% floor(len/200) == 0 || abs((val - last)) > threshold || i == len) {
             last <- val
             t <- append(t, li$Time[i])
-            p <- append(p, li$PhaseDiff[i])
+            p <- append(p, li$PhaseShift[i])
         }
     }
-    list(Time = t, PhaseDiff = p)
+    list(Time = t, PhaseShift = p)
 }
 
 cut_time <- function(d, t, ncycles=10, align=.5) {
@@ -160,34 +169,39 @@ read_wf <- function(filename) {
 # The ims waveform original data is in 'data', this function plot
 # voltage and current for a given time interval.
 #
-plot.ui_inst <- function(data, t1=NULL, t2=NULL, phase, type='p') {
-    if (! is.null(t1))
-        data <- subset(data, Time >= t1)
-    if (! is.null(t2))
-        data <- subset(data, Time <= t2)
+plot.ui_inst <- function(data, t1=-Inf, t2=Inf, phase, type='p') {
     par(bg='cornsilk', mfrow=c(2,length(phase)))
+
+    data <- subset(data, Time >= t1)
+    data <- subset(data, Time <= t2)
+
     sapply(phase, function(n) {
                plot(data$Time, data[, paste('U', n, sep='')] * USCALE,
                     main='',
                     xlab='Time (s)',
                     ylab=paste('U', n, ' (V)', sep=''),
                     col='orange', type=type)
-               }
-    )
+               abline(h=0, lty=3)
+    })
     sapply(phase, function(n) {
                plot(data$Time, data[, paste('I', n, sep='')] * ISCALE,
                     main='',
                     xlab='Time (s)',
                     ylab=paste('I', n, ' (A)', sep=''),
                     col='blue', type=type)
-               }
-    )
+               abline(h=0, lty=3)
+    })
 }
 
 # Plot U/I histogram
 #
-plot.ui_hist <- function(data, t1=NULL, t2=NULL, phase) { 
+plot.ui_hist <- function(data, t1=-Inf, t2=Inf, phase) { 
     par(bg='cornsilk', mfrow=c(2, length(phase)))
+
+    data <- subset(data, Time >= t1)
+    data <- subset(data, Time <= t2)
+    if (nrow(data) == 0) stop('empty data')
+
     sapply(phase, function(n) {
                hist(data[, paste('U', n, sep='')] * USCALE,
                     xlab='Voltage (V)', main='')
@@ -200,34 +214,58 @@ plot.ui_hist <- function(data, t1=NULL, t2=NULL, phase) {
     )
 }
 
-# Plot U/I RMS with reduced samples, limited by a change rage threshold
+# Plot U/I RMS as well as phase angle trajetories with reduced samples, limited
+# by a change rage threshold
 #
-plot.rms_reduced <- function(data, t1=NULL, t2=NULL, phase, threshold=0, type='p') {
-    if (! is.null(t1))
-        data <- subset(data, Time >= t1)
-    if (! is.null(t2))
-        data <- subset(data, Time <= t2)
-    par(bg='cornsilk', mfrow=c(2,length(phase)))
+plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
+                               threshold.u=0, threshold.i=0, threshold.phase_shift=0,
+                               type='l') {
+    par(bg='cornsilk', mfrow=c(3, length(phase)))
+
+    data <- subset(data, Time >= t1)
+    data <- subset(data, Time <= t2)
+    if (nrow(data) < SAMPLES_PER_PERIOD) stop('data size is not enough')
+
     sapply(phase, function(n) {
-               li.rms <- rms.reduce(rms.map(list(Time=data$Time,
-                                                 Value=data[, paste('U', n, sep='')] * USCALE)),
-                                    threshold)
-               plot(li.rms$Time, li.rms$Rms,
-                    main='',
-                    xlab='Time (s)',
-                    ylab=paste('U', n, ' (V)', sep=''),
-                    col='orange', type=type)
+           colname <- paste('U', n, sep='')
+           li <- rms.reduce(
+                            rms.map(list(Time=data$Time,
+                                Value=data[, colname] * USCALE)),
+                                threshold=threshold.u)
+           plot(li$Time, li$Rms,
+                main='',
+                xlab='Time (s)',
+                ylab=paste('U', n, ' (V)', sep=''),
+                ylim=c(0, max(data[, colname])*USCALE),
+                col='orange', type=type)
     })
     sapply(phase, function(n) {
-               li.rms <- rms.reduce(rms.map(list(Time=data$Time,
-                                                 Value=data[, paste('I', n, sep='')] * ISCALE)),
-                                    threshold)
-               plot(li.rms$Time, li.rms$Rms,
-                    main='',
-                    xlab='Time (s)',
-                    ylab=paste('I', n, ' (A)', sep=''),
-                    col='orange', type=type)
+           colname <- paste('I', n, sep='')
+           li <- rms.reduce(
+                            rms.map(list(Time=data$Time,
+                                Value=data[, colname] * ISCALE)),
+                                threshold=threshold.i)
+           plot(li$Time, li$Rms,
+                main='',
+                xlab='Time (s)',
+                ylab=paste('I', n, ' (A)', sep=''),
+                ylim=c(0, max(data[, colname])*USCALE),
+                col='blue', type=type)
     })
+    sapply(phase, function(n) {
+           signal <- list(Time=data$Time,
+                          U=data[, paste('U', n, 'Scaled', sep='')],
+                          I=data[, paste('I', n, 'Scaled', sep='')])
+           li <- phase_shift(signal, threshold=threshold.phase_shift)
+           print(li$PhaseShift)
+           plot(li$Time, li$PhaseShift,
+                main='',
+                xlab='Time (s)',
+                ylab='xxx',
+                ylim=c(0, 2*pi),
+                col='seagreen', type=type)
+    })
+    return(NULL)
 }
 
 save_plot <- function(plot, name, dir='.') {
@@ -259,7 +297,7 @@ dev_new <- function(n=1, m=1, name = NULL) {
 # @x the phase difference betwee voltage and current, defined as phase of
 #   voltage minus phase of current. we suppose voltage phase is zero.
 #
-plot.phase_angle <- function(x = 0) {
+plot.ui_phase_shift <- function(x = 0) {
     v.rms <- 220
     i.rms <- 50
     f.0 <- 50
