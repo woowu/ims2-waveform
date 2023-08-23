@@ -25,8 +25,8 @@ data <- read_wf(opt$filename)
 
 each_phase <- function(n) {
     print(paste('handling phase', n, sep=''))
-    ri <- rms_df(data$Time, data[, paste('I', n, 'Scaled', sep='')])
-    ru <- rms_df(data$Time, data[, paste('U', n, 'Scaled', sep='')])
+    ri <- rms_map(data$Time, data[, paste('I', n, 'Scaled', sep='')])
+    ru <- rms_map(data$Time, data[, paste('U', n, 'Scaled', sep='')])
     p <- function() {
         par(bg='cornsilk', mfrow=c(2, 1))
         hist(ru$Rms, main='', xlab=paste('U', n, ' RMS', sep=''))
