@@ -112,7 +112,12 @@ function parseStream(workpad)
             });
     };
 
-    workpad.messageStream.push(...workpad.inQueue.shift());
+    const b = workpad.inQueue.shift();
+    if (! b) { /* TODO: check why this could happen */
+        onEnd();
+        return;
+    }
+    workpad.messageStream.push(...b);
 
     /* parse and strip a whole message, otherwise keep the stream
      * data untouched.
@@ -186,6 +191,11 @@ const argv = yargs(process.argv.slice(2))
             describe: 'number of frames to receive',
             type: 'number',
         },
+        'd': {
+            alias: 'dispatch',
+            describe: 'dispatch generated csv for post processing',
+            type: 'boolean',
+        },
     }).argv;
 
 const workpad = {
@@ -210,6 +220,7 @@ const workpad = {
     ws: null,
     outFilename: argv.out,
     csvInfo: null,
+    dispatch: argv.dispatch,
 }
 
 if (argv.out && ! argv.raw) {
@@ -256,7 +267,7 @@ function writeCsvRow(row, workpad)
         workpad.csvInfo.filename = newFile();
     if (workpad.csvInfo.rowCounter == MAX_ROWS_EACH_FILE) {
         workpad.ws.end();
-        dispatchFile(workpad.csvInfo.filename);
+        if (workpad.dispatch) dispatchFile(workpad.csvInfo.filename);
         workpad.csvInfo.filename = newFile();
     }
     workpad.ws.write(row + '\n');
