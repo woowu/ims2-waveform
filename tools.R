@@ -216,9 +216,10 @@ plot.ui_hist <- function(data, t1=-Inf, t2=Inf, phase) {
 
 # Plot U/I RMS as well as phase angle trajetories with reduced samples, limited
 # by a change rage threshold
+# @threshold sample reducing threshold of U, I and Phase shift 
 #
 plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
-                               threshold.u=0, threshold.i=0, threshold.phase_shift=0,
+                               threshold=c(0, 0, 0),
                                type='l') {
     par(bg='cornsilk', mfrow=c(3, length(phase)))
 
@@ -231,7 +232,7 @@ plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
            li <- rms.reduce(
                             rms.map(list(Time=data$Time,
                                 Value=data[, colname] * USCALE)),
-                                threshold=threshold.u)
+                                threshold=threshold[1])
            plot(li$Time, li$Rms,
                 main='',
                 xlab='Time (s)',
@@ -244,7 +245,7 @@ plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
            li <- rms.reduce(
                             rms.map(list(Time=data$Time,
                                 Value=data[, colname] * ISCALE)),
-                                threshold=threshold.i)
+                                threshold=threshold[2])
            plot(li$Time, li$Rms,
                 main='',
                 xlab='Time (s)',
@@ -256,14 +257,15 @@ plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
            signal <- list(Time=data$Time,
                           U=data[, paste('U', n, 'Scaled', sep='')],
                           I=data[, paste('I', n, 'Scaled', sep='')])
-           li <- phase_shift(signal, threshold=threshold.phase_shift)
-           print(li$PhaseShift)
+           li <- phase_shift(signal, threshold=threshold[3])
+           #print(li$PhaseShift)
            plot(li$Time, li$PhaseShift,
                 main='',
                 xlab='Time (s)',
-                ylab='xxx',
+                ylab=expression(theta),
                 ylim=c(0, 2*pi),
                 col='seagreen', type=type)
+           abline(h=c(pi/2, pi, 3*pi/2), lty=3)
     })
     return(NULL)
 }
