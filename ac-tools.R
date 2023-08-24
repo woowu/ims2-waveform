@@ -5,7 +5,9 @@ USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
 RATE <- 6.4e3
 SAMPLES_PER_PERIOD <- 128
-MAX_TIME_POINTS_TO_PLOT <- 672 # horizontal pixels of a 1:1 svg
+MAX_TIME_POINTS_TO_PLOT <- 672 # don't save pnt more than this size
+VOLTAGE = 230
+IMAX = 100
 
 # If I don't have a full period to work with, just
 # return NA values which can then be excluded later.
@@ -184,37 +186,41 @@ read_wf <- function(filename) {
 # The ims waveform original data is in 'data', this function plot
 # voltage and current for a given time interval.
 #
-plot.ui_inst <- function(data, t1=-Inf, t2=Inf, phase, type='p') {
+plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p') {
     par(bg='cornsilk', mfrow=c(2,length(phase)))
 
-    data <- subset(data, Time >= t1)
-    data <- subset(data, Time <= t2)
+    data <- subset(data, Time >= time_range[1])
+    data <- subset(data, Time <= time_range[2])
 
-    sapply(phase, function(n) {
-               plot(data$Time, data[, paste('U', n, sep='')] * USCALE,
-                    main='',
-                    xlab='Time (s)',
-                    ylab=paste('U', n, ' (V)', sep=''),
-                    col='orange', type=type)
-               abline(h=0, lty=3)
-    })
-    sapply(phase, function(n) {
-               plot(data$Time, data[, paste('I', n, sep='')] * ISCALE,
-                    main='',
-                    xlab='Time (s)',
-                    ylab=paste('I', n, ' (A)', sep=''),
-                    col='blue', type=type)
-               abline(h=0, lty=3)
+    inst_names <- c('U', 'I')
+    max_rms <- c(VOLTAGE, IMAX)
+    scales <- c(USCALE, ISCALE)
+    colors <- c('orange', 'blue')
+
+    sapply(1:length(inst_names), function(m) {
+        sapply(phase, function(n) {
+                   val_min <- min(data[, paste(inst_names[m], n, sep='')] * scales[m])
+                   val_max <- max(data[, paste(inst_names[m], n, sep='')] * scales[m])
+                   miny <- min(-max_rms[m] * sqrt(2), val_min)
+                   maxy <- max(max_rms[m] * sqrt(2), val_max)
+                   plot(data$Time, data[, paste(inst_names[m], n, sep='')] * scales[m],
+                        main='',
+                        xlab='Time (s)',
+                        ylab=paste(inst_names[m], n, sep=''),
+                        ylim=c(miny, maxy),
+                        col=colors[m], type=type)
+                   abline(h=c(0, val_min, val_max), lty=3)
+        })
     })
 }
 
 # Plot U/I histogram
 #
-plot.ui_hist <- function(data, t1=-Inf, t2=Inf, phase) { 
+plot.ui_hist <- function(data, time_range=c(-Inf, Inf), phase) { 
     par(bg='cornsilk', mfrow=c(2, length(phase)))
 
-    data <- subset(data, Time >= t1)
-    data <- subset(data, Time <= t2)
+    data <- subset(data, Time >= time_range[1])
+    data <- subset(data, Time <= time_range[2])
     if (nrow(data) == 0) stop('empty data')
 
     sapply(phase, function(n) {
@@ -233,18 +239,20 @@ plot.ui_hist <- function(data, t1=-Inf, t2=Inf, phase) {
 # by a change rage threshold
 # @threshold sample reducing threshold of U, I and Phase shift 
 #
-plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
+plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
                                threshold=c(0, 0, 0),
                                type='l') {
     par(bg='cornsilk', mfrow=c(3, length(phase)))
 
-    data <- subset(data, Time >= t1)
-    data <- subset(data, Time <= t2)
+    data <- subset(data, Time >= time_range[1])
+    data <- subset(data, Time <= time_range[2])
     if (nrow(data) < SAMPLES_PER_PERIOD) stop('data size is not enough')
 
     rms_names <- c('U', 'I')
     scales <- c(USCALE, ISCALE)
     colors <- c('orange', 'blue')
+    max_rms <- c(VOLTAGE, IMAX)
+
     sapply(1:length(rms_names), function(m) {
         sapply(phase, function(n) {
                colname <- paste(rms_names[m], n, sep='')
@@ -252,12 +260,14 @@ plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
                                 rms.map(list(Time=data$Time,
                                     Value=data[, colname] * scales[m])),
                                     threshold=threshold[1])
+               val_max <- max(data[, colname]) * scales[m]
                plot(li$Time, li$Rms,
                     main='',
                     xlab='Time (s)',
                     ylab=paste(rms_names[m], n, sep=''),
-                    ylim=c(0, max(data[, colname]) * scales[m]),
+                    ylim=c(0, max(val_max, max_rms[m])),
                     col=colors[m], type=type)
+               abline(h=c(0, val_max), lty=3)
         })
     })
 
@@ -276,13 +286,17 @@ plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
     })
 }
 
-save_plot <- function(plot, name, dir='.') {
-    svg(paste(dir, '/', name, '.svg', sep=''))
-    plot()
-    dev.off()
-    png(paste(dir, '/', name, '.png', sep=''))
-    plot()
-    dev.off()
+save_plot <- function(plot, name, dir='.', w=480, h=480, png=F, svg=T) {
+    if (svg) {
+        svg(paste(dir, '/', name, '.svg', sep=''))
+        plot()
+        dev.off()
+    }
+    if (png) {
+        png(paste(dir, '/', name, '.png', sep=''), width=w, height=h, unit='px')
+        plot()
+        dev.off()
+    }
 }
 
 dev_new <- function(n=1, m=1, name = NULL) {
