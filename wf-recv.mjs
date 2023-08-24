@@ -25,7 +25,7 @@ const MESSAGE_SEQNO_LEN = 4;
 const MESSAGE_TIMESTAMP_LEN = 8;
 const MESSAGE_LEN_SZ = 4;
 const MESSAGE_HEAD_LEN = MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN + MESSAGE_LEN_SZ;
-const MAX_ROWS_EACH_FILE = 1.92e6;
+const MAX_ROWS_EACH_FILE = 5.76e6;
 const FILE_HANDLER = 'wf-overview.R';
 
 function putData(workpad, data)
@@ -316,6 +316,9 @@ function useSocketClient()
 
     client.connect(argv.port, argv.host, () => {
         console.error('connected');
+    });
+    client.on('error', e => {
+        throw(e); 
     });
     client.on('close', () => {
         endOutStream(workpad);
