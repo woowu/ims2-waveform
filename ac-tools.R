@@ -282,7 +282,7 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
                 ylab=expression(theta[u-i]),
                 ylim=c(-pi, pi),
                 col='seagreen', type=type)
-           abline(h=c(pi/2, -pi/2), lty=3)
+           abline(h=c(0, pi/2, -pi/2), lty=3)
     })
 }
 
