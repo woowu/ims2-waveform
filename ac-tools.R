@@ -5,6 +5,7 @@ USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
 RATE <- 6.4e3
 SAMPLES_PER_PERIOD <- 128
+MAX_TIME_POINTS_TO_PLOT <- 672 # horizontal pixels of a 1:1 svg
 
 # If I don't have a full period to work with, just
 # return NA values which can then be excluded later.
@@ -48,8 +49,10 @@ rms.reduce <- function(rms, threshold=0) {
 
     for (i in 1:len) {
         val <- rms$Rms[i]
-        if (i %% floor(len/200) == 0 || is.nan(last * threshold)
-            || abs((val - last)) > last * threshold || i == len) {
+        if (i %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0 
+            || i == len
+            || is.nan(last * threshold)
+            || abs((val - last)) > last * threshold) {
             last <- val
             t <- append(t, rms$Time[i])
             r <- append(r, val)
@@ -87,7 +90,7 @@ cross.put_next <- function(state, time, value) {
 phase_shift <- function(ac_signal, freq.f0=50, threshold=0) {
     period <- 1/freq.f0
     time <- c()
-    phase <- c()
+    phase <- c()    # between (-pi, pi]
 
     state.u <- NULL
     state.i <- NULL
@@ -121,8 +124,13 @@ phase_shift <- function(ac_signal, freq.f0=50, threshold=0) {
         if (diff >= period)
             next
 
+        # convert the ange into range of (-p2, pi]
+        #
+        rad <- (diff/period)*2*pi
+        if (rad > pi) rad <- rad - 2*pi
+
         time <- append(time, t)
-        phase <- append(phase, (diff/period)*2*pi)
+        phase <- append(phase, rad)
     }
     li <- list(Time=time, PhaseShift=phase)
     if (threshold == 0)
@@ -130,19 +138,26 @@ phase_shift <- function(ac_signal, freq.f0=50, threshold=0) {
 
     t <- c()
     p <- c() 
-    last <- -Inf 
+    last.rad <- 0
     len <- length(li$PhaseShift)
 
     for (i in 1:len) {
-        val <- li$PhaseShift[i]
-        if (val >= pi) val <- -(2*pi - val)
-        if (i %% floor(len/200) == 0 || abs((val - last)) > threshold || i == len) {
-            last <- val
+        rad <- li$PhaseShift[i]
+
+        # calculate the difference within the boundary of (-pi, pi]
+        #
+        diff <- (rad - last.rad) %% (2*pi)
+        if (diff >= pi) diff <- -(2*pi - diff)
+
+        if (i %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0
+            || i == len
+            || abs(diff) > threshold) {
+            last.rad <- rad
             t <- append(t, li$Time[i])
-            p <- append(p, li$PhaseShift[i])
+            p <- append(p, rad)
         }
     }
-    list(Time = t, PhaseShift = p)
+    list(Time=t, PhaseShift=p)
 }
 
 cut_time <- function(d, t, ncycles=10, align=.5) {
@@ -227,47 +242,38 @@ plot.rms_and_phase <- function(data, t1=-Inf, t2=Inf, phase,
     data <- subset(data, Time <= t2)
     if (nrow(data) < SAMPLES_PER_PERIOD) stop('data size is not enough')
 
-    sapply(phase, function(n) {
-           colname <- paste('U', n, sep='')
-           li <- rms.reduce(
-                            rms.map(list(Time=data$Time,
-                                Value=data[, colname] * USCALE)),
-                                threshold=threshold[1])
-           plot(li$Time, li$Rms,
-                main='',
-                xlab='Time (s)',
-                ylab=paste('U', n, ' (V)', sep=''),
-                ylim=c(0, max(data[, colname])*USCALE),
-                col='orange', type=type)
+    rms_names <- c('U', 'I')
+    scales <- c(USCALE, ISCALE)
+    colors <- c('orange', 'blue')
+    sapply(1:length(rms_names), function(m) {
+        sapply(phase, function(n) {
+               colname <- paste(rms_names[m], n, sep='')
+               li <- rms.reduce(
+                                rms.map(list(Time=data$Time,
+                                    Value=data[, colname] * scales[m])),
+                                    threshold=threshold[1])
+               plot(li$Time, li$Rms,
+                    main='',
+                    xlab='Time (s)',
+                    ylab=paste(rms_names[m], n, sep=''),
+                    ylim=c(0, max(data[, colname]) * scales[m]),
+                    col=colors[m], type=type)
+        })
     })
-    sapply(phase, function(n) {
-           colname <- paste('I', n, sep='')
-           li <- rms.reduce(
-                            rms.map(list(Time=data$Time,
-                                Value=data[, colname] * ISCALE)),
-                                threshold=threshold[2])
-           plot(li$Time, li$Rms,
-                main='',
-                xlab='Time (s)',
-                ylab=paste('I', n, ' (A)', sep=''),
-                ylim=c(0, max(data[, colname])*USCALE),
-                col='blue', type=type)
-    })
+
     sapply(phase, function(n) {
            signal <- list(Time=data$Time,
                           U=data[, paste('U', n, 'Scaled', sep='')],
                           I=data[, paste('I', n, 'Scaled', sep='')])
            li <- phase_shift(signal, threshold=threshold[3])
-           #print(li$PhaseShift)
            plot(li$Time, li$PhaseShift,
                 main='',
                 xlab='Time (s)',
-                ylab=expression(theta),
-                ylim=c(0, 2*pi),
+                ylab=expression(theta[u-i]),
+                ylim=c(-pi, pi),
                 col='seagreen', type=type)
-           abline(h=c(pi/2, pi, 3*pi/2), lty=3)
+           abline(h=c(pi/2, -pi/2), lty=3)
     })
-    return(NULL)
 }
 
 save_plot <- function(plot, name, dir='.') {
