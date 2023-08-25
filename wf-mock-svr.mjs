@@ -47,6 +47,23 @@ function handleConnection(socket)
         console.error('error:', err.message);
     });
 
+    const logger = (function() {
+        var lastDataLen = 0;
+        var ttlDataLen = 0;
+        var lastTime = new Date().getTime();
+        return (block, seqno, data) => {
+            ttlDataLen += data.length;
+            if (! (seqno % 10)) {
+                console.log(`send block. seqno ${seqno}`
+                    + ` len ${data.length} ttl len ${ttlDataLen}`
+                    + ` ${( (ttlDataLen - lastDataLen) * 8 / (new Date().getTime() - lastTime) ).toFixed(3)} kbps`
+                );
+                lastDataLen = ttlDataLen;
+                lastTime = new Date().getTime();
+            }
+        };
+    }());
+
     (function nextStream() {
         var stream = generateNFrames(128 * 10);
         streamNoErrLen += stream.length;
@@ -68,12 +85,13 @@ function handleConnection(socket)
             const t = new Date().getTime();
             const ab = new ArrayBuffer(1 + 4 + 8 + 4);
             new DataView(ab).setUint8(0, BLOCK_HEAD);
-            new DataView(ab).setUint32(1, ++blockSeqno);
+            new DataView(ab).setUint32(1, blockSeqno);
             new DataView(ab).setBigInt64(1 + 4, BigInt(t));
             new DataView(ab).setUint32(1 + 4 + 8, payload.length);
             const block = Buffer.concat([Buffer.from(ab), Buffer.from(payload)]);
-            console.log('send block. size', block.length, block.slice(0, 20), '...');
+            logger(block, blockSeqno, payload);
             socket.write(block);
+            ++blockSeqno;
         }
         if (! end) setTimeout(nextStream, 1);
     }());
