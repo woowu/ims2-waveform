@@ -209,11 +209,19 @@ const workpad = {
     frameCounter: 0,
     messagePrinter: (function useMessagePrinter(threshold) {
         var counter = 0;
+        var startTime = new Date().getTime();
+        var len = 0;
         return (seqno, payload, frameCounter) => {
             if (++counter == threshold) {
-                console.log('seq', seqno, 'payload len', payload.length,
-                    'recved frames:', frameCounter);
+                console.log(`seq ${seqno} payload len ${payload.length}`
+                    + ` recved frames: ${frameCounter}`
+                    + ` ${(len * 8/(new Date().getTime() - startTime)).toFixed(3)}`
+                    + ' kbps');
                 counter = 0;
+                startTime = new Date().getTime();
+                len = 0;
+            } else {
+                len += payload.length;
             }
         };
     })(10),
