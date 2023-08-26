@@ -1,5 +1,5 @@
 library(tidyverse)
-library(dplR)
+#library(dplR)
 
 USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
@@ -32,9 +32,10 @@ rms.map <- function(series) {
                Time = series$Time,
                Rms = sapply(1:length(series$Time), function(n) rms.calc(series$Value, n))
                )
-    # RMS values at the first SAMPLES_PER_PERIOD samples are NA's
+    # RMS values at the first SAMPLES_PER_PERIOD - 1 samples are NA's
     #
-    d <- d[SAMPLES_PER_PERIOD:nrow(d),]
+    d$Rms[1:(SAMPLES_PER_PERIOD - 1)] <- 0
+    #d <- d[SAMPLES_PER_PERIOD:nrow(d),]
     list(Time = d$Time, Rms = d$Rms)
 }
 
@@ -51,6 +52,9 @@ rms.reduce <- function(rms, threshold=0) {
 
     for (i in 1:len) {
         val <- rms$Rms[i]
+
+        # the first, last and those deviated from the last value for over the threshold points
+        # are output
         if (i %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0 
             || i == len
             || is.nan(last * threshold)
@@ -162,6 +166,61 @@ phase_shift <- function(ac_signal, freq.f0=50, threshold=0) {
     list(Time=t, PhaseShift=p)
 }
 
+# @k_start start value of the times of interquartile range
+# @stop stop searching better k when the result size close to 'stop' times the
+#   original data size
+# @kp every next iteration, the k will increase kp * error
+#
+outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75) {
+    der <- c(0, diff(value))
+
+    k <- k_start
+    pk <- k
+    sp <- max(stop * length(time), 5)
+    cnt <- 0
+    err <- Inf
+
+    while (cnt < 100) {
+        ix <- which(abs(der) > k * IQR(der))
+        err <- (length(ix) - sp)/sp
+        if (abs(err) < .05) break
+
+        # calculate the next k using proportional way
+        #
+        pk <- k
+        k <- k + max(min(err * kp, 2), -2)
+
+        # stop if algorithm keep bouncing
+        #
+        if (pk * k < 0) {
+            bouncing <- bouncing + 1
+        } else
+            bouncing <- 0
+        if (bouncing == 3) break
+
+        cnt <- cnt + 1
+    }
+    print(c(sp, length(ix), k, err, cnt))
+
+    ol.time <- rep(NA, length(ix))
+    ol.value <- rep(NA, length(ix))
+    ol.time[ix] <- time[ix] 
+    ol.value[ix] <- value[ix] 
+    list(time=ol.time, value=ol.value)
+}
+
+# @threshold if absolute of the value greater than the threshold, the value
+#   will be output
+#
+extremer <- function(time, value, threshold) {
+    ix <- which(abs(value) > threshold)
+    ol.time <- rep(NA, length(ix))
+    ol.value <- rep(NA, length(ix))
+    ol.time[ix] <- time[ix] 
+    ol.value[ix] <- value[ix] 
+    list(time=ol.time, value=ol.value)
+}
+
 cut_time <- function(d, t, ncycles=10, align=.5) {
     intvl <- c(t, t + ncycles * SAMPLES_PER_PERIOD * 1/RATE)
     intvl <- intvl - align * ncycles * SAMPLES_PER_PERIOD * 1/RATE
@@ -211,6 +270,65 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p') {
                         col=colors[m], type=type)
                    abline(h=c(0, val_min, val_max), lty=3)
         })
+    })
+}
+
+# Plot U/I outlier and extremers
+#
+plot.ui_oe <- function(data, time_range=c(-Inf, Inf), phase, name=NULL) {
+    par(bg='cornsilk', mfrow=c(2,length(phase)))
+
+    data <- subset(data, Time >= time_range[1])
+    data <- subset(data, Time <= time_range[2])
+
+    max_rms <- c(VOLTAGE, IMAX)
+    type <- c('U', 'I')
+    ex_threshold <- c(VOLTAGE * sqrt(2) * 1.05, IMAX * sqrt(2) * 1.05)
+    colors <- c('orange', 'blue')
+
+    sapply(phase, function(n) {
+        x <- sapply(1:length(type), function(m) {
+            d <- data[, paste(type[m], n, 'Scaled', sep='')]
+
+            print(paste('calculate outlier on phase ',
+                        n, ' for ', type[m], sep=''))
+            li.ol <- outlier(data$Time, d)
+            if (! is.null(name))
+                write.csv(na.omit(data.frame(Time=li.ol$time, Value=li.ol$value)),
+                          paste(name, '-outlier-', type[m], n,
+                                '.csv', sep=''),
+                          row.names=F)
+
+            print(paste('calculate extermers on phase ',
+                        n, ' for ', type[m], sep=''))
+            li.ex <- extremer(data$Time, d, threshold=ex_threshold[m])
+            if (! is.null(name))
+                write.csv(na.omit(data.frame(Time=li.ex$time, Value=li.ex$value)),
+                          paste(name, '-extremer-', type[m], n,
+                                '.csv', sep=''),
+                          row.names=F)
+
+            val_min <- min(data[, paste(type[m], n, 'Scaled', sep='')])
+            val_max <- max(data[, paste(type[m], n, 'Scaled', sep='')])
+            miny <- min(-max_rms[m] * sqrt(2), val_min)
+            maxy <- max(max_rms[m] * sqrt(2), val_max)
+            plot(li.ol$time, li.ol$value,
+                 main='',
+                 xlab='Time (s)',
+                 ylab=paste(type[m], n, sep=''),
+                 ylim=c(miny, maxy),
+                 col=colors[m], type='p')
+            points(li.ex$time, li.ex$value, pch=8, col='red')
+            abline(h=0, lty=3)
+
+            union(as.numeric(na.omit(li.ol$time)),
+                       as.numeric(na.omit(li.ex$time)))
+        })
+        time <- sort(union(x[, 1], x[, 2]))
+        if (! is.null(name))
+            write.csv(data.frame(Time=time),
+                      paste(name, '-oe-time-union-', n, '.csv', sep=''),
+                      row.names=F)
     })
 }
 
