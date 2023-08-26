@@ -8,6 +8,7 @@ SAMPLES_PER_PERIOD <- 128
 MAX_TIME_POINTS_TO_PLOT <- 672 # don't save pnt more than this size
 VOLTAGE = 230
 IMAX = 100
+IB = 10
 
 # If I don't have a full period to work with, just
 # return NA values which can then be excluded later.
@@ -251,84 +252,25 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p') {
     data <- subset(data, Time >= time_range[1])
     data <- subset(data, Time <= time_range[2])
 
-    inst_names <- c('U', 'I')
-    max_rms <- c(VOLTAGE, IMAX)
+    quantity <- c('U', 'I')
+    min_scale <- c(VOLTAGE/10, IB/10)
     scales <- c(USCALE, ISCALE)
     colors <- c('orange', 'blue')
 
-    sapply(1:length(inst_names), function(m) {
+    sapply(1:length(quantity), function(m) {
         sapply(phase, function(n) {
-                   val_min <- min(data[, paste(inst_names[m], n, sep='')] * scales[m])
-                   val_max <- max(data[, paste(inst_names[m], n, sep='')] * scales[m])
-                   miny <- min(-max_rms[m] * sqrt(2), val_min)
-                   maxy <- max(max_rms[m] * sqrt(2), val_max)
-                   plot(data$Time, data[, paste(inst_names[m], n, sep='')] * scales[m],
+                   val_min <- min(data[, paste(quantity[m], n, sep='')] * scales[m])
+                   val_max <- max(data[, paste(quantity[m], n, sep='')] * scales[m])
+                   miny <- min(-min_scale[m] * sqrt(2), val_min)
+                   maxy <- max(min_scale[m] * sqrt(2), val_max)
+                   plot(data$Time, data[, paste(quantity[m], n, sep='')] * scales[m],
                         main='',
                         xlab='Time (s)',
-                        ylab=paste(inst_names[m], n, sep=''),
+                        ylab=paste(quantity[m], n, sep=''),
                         ylim=c(miny, maxy),
                         col=colors[m], type=type)
                    abline(h=c(0, val_min, val_max), lty=3)
         })
-    })
-}
-
-# Plot U/I outlier and extremers
-#
-plot.ui_oe <- function(data, time_range=c(-Inf, Inf), phase, name=NULL) {
-    par(bg='cornsilk', mfrow=c(2,length(phase)))
-
-    data <- subset(data, Time >= time_range[1])
-    data <- subset(data, Time <= time_range[2])
-
-    max_rms <- c(VOLTAGE, IMAX)
-    type <- c('U', 'I')
-    ex_threshold <- c(VOLTAGE * sqrt(2) * 1.05, IMAX * sqrt(2) * 1.05)
-    colors <- c('orange', 'blue')
-
-    sapply(phase, function(n) {
-        x <- sapply(1:length(type), function(m) {
-            d <- data[, paste(type[m], n, 'Scaled', sep='')]
-
-            print(paste('calculate outlier on phase ',
-                        n, ' for ', type[m], sep=''))
-            li.ol <- outlier(data$Time, d)
-            if (! is.null(name))
-                write.csv(na.omit(data.frame(Time=li.ol$time, Value=li.ol$value)),
-                          paste(name, '-outlier-', type[m], n,
-                                '.csv', sep=''),
-                          row.names=F)
-
-            print(paste('calculate extermers on phase ',
-                        n, ' for ', type[m], sep=''))
-            li.ex <- extremer(data$Time, d, threshold=ex_threshold[m])
-            if (! is.null(name))
-                write.csv(na.omit(data.frame(Time=li.ex$time, Value=li.ex$value)),
-                          paste(name, '-extremer-', type[m], n,
-                                '.csv', sep=''),
-                          row.names=F)
-
-            val_min <- min(data[, paste(type[m], n, 'Scaled', sep='')])
-            val_max <- max(data[, paste(type[m], n, 'Scaled', sep='')])
-            miny <- min(-max_rms[m] * sqrt(2), val_min)
-            maxy <- max(max_rms[m] * sqrt(2), val_max)
-            plot(li.ol$time, li.ol$value,
-                 main='',
-                 xlab='Time (s)',
-                 ylab=paste(type[m], n, sep=''),
-                 ylim=c(miny, maxy),
-                 col=colors[m], type='p')
-            points(li.ex$time, li.ex$value, pch=8, col='red')
-            abline(h=0, lty=3)
-
-            union(as.numeric(na.omit(li.ol$time)),
-                       as.numeric(na.omit(li.ex$time)))
-        })
-        time <- sort(union(x[, 1], x[, 2]))
-        if (! is.null(name))
-            write.csv(data.frame(Time=time),
-                      paste(name, '-oe-time-union-', n, '.csv', sep=''),
-                      row.names=F)
     })
 }
 
@@ -401,6 +343,65 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
                 ylim=c(-pi, pi),
                 col='seagreen', type=type)
            abline(h=c(0, pi/2, -pi/2), lty=3)
+    })
+}
+
+# Plot U/I outlier and extremers
+#
+plot.ui_oe <- function(data, time_range=c(-Inf, Inf), phase, name=NULL) {
+    par(bg='cornsilk', mfrow=c(2,length(phase)))
+
+    data <- subset(data, Time >= time_range[1])
+    data <- subset(data, Time <= time_range[2])
+
+    min_scale <- c(VOLTAGE/10, IB/10)
+    type <- c('U', 'I')
+    ex_threshold <- c(VOLTAGE * sqrt(2) * 1.05, IMAX * sqrt(2) * 1.05)
+    colors <- c('orange', 'blue')
+
+    sapply(phase, function(n) {
+        x <- sapply(1:length(type), function(m) {
+            d <- data[, paste(type[m], n, 'Scaled', sep='')]
+
+            print(paste('calculate outlier on phase ',
+                        n, ' for ', type[m], sep=''))
+            li.ol <- outlier(data$Time, d)
+            if (! is.null(name))
+                write.csv(na.omit(data.frame(Time=li.ol$time, Value=li.ol$value)),
+                          paste(name, '-outlier-', type[m], n,
+                                '.csv', sep=''),
+                          row.names=F)
+
+            print(paste('calculate extermers on phase ',
+                        n, ' for ', type[m], sep=''))
+            li.ex <- extremer(data$Time, d, threshold=ex_threshold[m])
+            if (! is.null(name))
+                write.csv(na.omit(data.frame(Time=li.ex$time, Value=li.ex$value)),
+                          paste(name, '-extremer-', type[m], n,
+                                '.csv', sep=''),
+                          row.names=F)
+
+            val_min <- min(data[, paste(type[m], n, 'Scaled', sep='')])
+            val_max <- max(data[, paste(type[m], n, 'Scaled', sep='')])
+            miny <- min(-min_scale[m] * sqrt(2), val_min)
+            maxy <- max(min_scale[m] * sqrt(2), val_max)
+            plot(li.ol$time, li.ol$value,
+                 main='',
+                 xlab='Time (s)',
+                 ylab=paste(type[m], n, sep=''),
+                 ylim=c(miny, maxy),
+                 col=colors[m], type='p')
+            points(li.ex$time, li.ex$value, pch=8, col='red')
+            abline(h=0, lty=3)
+
+            union(as.numeric(na.omit(li.ol$time)),
+                       as.numeric(na.omit(li.ex$time)))
+        })
+        time <- sort(union(x[, 1], x[, 2]))
+        if (! is.null(name))
+            write.csv(data.frame(Time=time),
+                      paste(name, '-oe-time-union-', n, '.csv', sep=''),
+                      row.names=F)
     })
 }
 

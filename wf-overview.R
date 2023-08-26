@@ -37,11 +37,13 @@ print(paste('plot timeline'))
 save_plot(function() plot.rms_and_phase(data, phase=phase, threshold=c(.05, .1, .1745)),
           name=paste(namebase, '-timeline', sep=''))
 
+print(paste('plot oe'))
 save_plot(function() {
               plot.ui_oe(data, phase=phase,
                          name=paste(namebase, sep=''))
 }, name=paste(namebase, '-oe', sep=''))
 
+print(paste('plot oe details'))
 sapply(phase, function(n) {
     d <- read.csv(paste(namebase, '-oe-time-union-', n, '.csv', sep=''))
     sapply(d$Time, function(t) {
@@ -49,7 +51,8 @@ sapply(phase, function(n) {
             plot.ui_inst(data, c(t - PERIOD, t + PERIOD), phase=n:n)
         }, name=paste(namebase, '-oe-inst-', t, sep=''))
         save_plot(function() {
-            plot.ui_inst(data, c(t - 1.5, t + 1.5), phase=n:n)
-        }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''))
+            plot.ui_inst(data, c(t - 3, t + 3), phase=n:n)
+        }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''),
+        png=T, svg=F)
     })
 })
