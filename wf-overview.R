@@ -33,26 +33,68 @@ if (is.null(opt$phase)) {
 print(paste('plot histograms'))
 save_plot(function() plot.ui_hist(data, phase=phase),
           name=paste(namebase, '-hist', sep=''))
-print(paste('plot timeline'))
-save_plot(function() plot.rms_and_phase(data, phase=phase, threshold=c(.05, .1, .1745)),
-          name=paste(namebase, '-timeline', sep=''))
+
+print(paste('calculate oe'))
+oe <- ui_oe.calc(data, phase=phase)
+sapply(names(oe), function(ol_or_ex) {
+    li <- oe[[ol_or_ex]]
+    sapply(names(li), function(u_or_i) {
+        li <- li[[u_or_i]]
+        sapply(names(li), function(phase) {
+            li <- li[[phase]]
+            if (length(li$time)) {
+                fname=paste(namebase, '-', ol_or_ex,
+                           '-', u_or_i,
+                           substr(phase, 2, 2),
+                           '.csv', sep='')
+                d <- data.frame(Time=li$time, Value=li$value)
+                write.csv(d, fname, row.names=F)
+            }
+        })
+    })
+})
 
 print(paste('plot oe'))
 save_plot(function() {
-              plot.ui_oe(data, phase=phase,
-                         name=paste(namebase, sep=''))
+              plot.ui_oe(oe$ol, oe$ex,
+                         time_scale=c(min(data$Time), max(data$Time)))
 }, name=paste(namebase, '-oe', sep=''))
 
-print(paste('plot oe details'))
-sapply(phase, function(n) {
-    d <- read.csv(paste(namebase, '-oe-time-union-', n, '.csv', sep=''))
-    sapply(d$Time, function(t) {
-        save_plot(function() {
-            plot.ui_inst(data, c(t - PERIOD, t + PERIOD), phase=n:n)
-        }, name=paste(namebase, '-oe-inst-', t, sep=''))
-        save_plot(function() {
-            plot.ui_inst(data, c(t - 5, t + 5), phase=n:n)
-        }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''),
-        png=T, svg=F)
+t <- lapply(names(oe), function(ol_or_ex) {
+    li <- oe[[ol_or_ex]]
+    t <- lapply(names(li), function(u_or_i) {
+        li <- li[[u_or_i]]
+        unname(sapply(names(li), function(phase) {
+            li[[phase]]$time
+        }))
     })
+    names(t) <- names(li)
+    t
 })
+names(t) <- names(oe)
+oe_time <- list(U=union(t$ol$U, t$ex$U), I=union(t$ol$I, t$ex$I))
+ui_time <- union(oe_time$U, oe_time$I)
+
+print(paste('plot oe details'))
+sapply(ui_time, function(t) {
+    marker.u=c()
+    marker.i=c()
+    if (t %in% oe_time$U) marker.u=c(t)
+    if (t %in% oe_time$I) marker.i=c(t)
+    save_plot(function() {
+        plot.ui_inst(data, c(t - PERIOD, t + PERIOD), phase=phase,
+            marker.u=marker.u,
+            marker.i=marker.i)
+    }, name=paste(namebase, '-oe-inst-', t, sep=''))
+    save_plot(function() {
+        plot.ui_inst(data, c(t - 7.5, t + 7.5), phase=phase,
+            marker.u=marker.u,
+            marker.i=marker.i)
+    }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''))
+})
+
+print(paste('plot timeline'))
+save_plot(function() plot.rms_and_phase(data, phase=phase,
+                                        threshold=c(.05, .1, .1745),
+                                        marker=ui_time),
+          name=paste(namebase, '-timeline', sep=''))
