@@ -25,47 +25,51 @@ rms.calc <- function(v, n) {
 # Create a data from from a time and instantaneous vector, replacing the
 # instantaneous vector to a rms vector. time and v should have same length and
 # must greater than SAMPLES_PER_PERIOD
-# @series a list of (Time, Value)
-# @return a list of (Time, Rms)
+# @time
+# @value
+# @return a list of (time, rms)
 #
-rms.map <- function(series) {
+rms.map <- function(time, value) {
     d <- data.frame(
-               Time = series$Time,
-               Rms = sapply(1:length(series$Time), function(n) rms.calc(series$Value, n))
+               Time = time,
+               Rms = sapply(1:length(time), function(n) rms.calc(value, n))
                )
     # RMS values at the first SAMPLES_PER_PERIOD - 1 samples are NA's
     #
     d$Rms[1:(SAMPLES_PER_PERIOD - 1)] <- 0
     #d <- d[SAMPLES_PER_PERIOD:nrow(d),]
-    list(Time = d$Time, Rms = d$Rms)
+    list(time = d$Time, rms = d$Rms)
 }
 
 # Reduce a rms series by just keeping the points of significant changes
-# @rms a list of (Time, Rms) series
+# @time
+# @rms
 # @threshold output the value only when (new - prev)/prev > threshold
 # @return a list of reduced rms series
 #
-rms.reduce <- function(rms, threshold=0) {
+rms.reduce <- function(time, rms, threshold=0) {
     r<- c()
     t <- c() 
     last <- -Inf
-    len <- length(rms$Rms)
+    len <- length(time)
 
     for (i in 1:len) {
-        val <- rms$Rms[i]
+        val <- rms[i]
 
-        # the first, last and those deviated from the last value for over the threshold points
-        # are output
+        # the first, last and those deviated from the last value for over
+        # the threshold points are output
         if (i %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0 
             || i == len
             || is.nan(last * threshold)
             || abs((val - last)) > last * threshold) {
             last <- val
-            t <- append(t, rms$Time[i])
+            t <- append(t, time[i])
             r <- append(r, val)
         }
     }
-    list(Time = t, Rms = r)
+    print(paste('rms series downsampled from ', length(time),
+                ' to ', length(t), sep=''))
+    list(time=t, rms=r)
 }
 
 #
@@ -75,7 +79,8 @@ rms.reduce <- function(rms, threshold=0) {
 # @return updated state variable
 #
 cross.put_next <- function(state, time, value) {
-    if (value == 0) return(state)
+    if (value == 0)
+        return(state)
     if (is.null(state)) {
         return(list(last_value = value, last_time = time, cross_time = NULL))
     } else if (state$last_value < 0 & value > 0) {
@@ -86,40 +91,38 @@ cross.put_next <- function(state, time, value) {
     }
 }
 
-# @ac_signal a list of (Time, U, I) series
+# @time time, u and i form a time series of AC signals
+# @u
+# @i
 # @freq.f0 fundamental frequency
 # @threshold only output points when it deviates from the previous one for
 #   the givin threshold value.
-# @return a list of (Time, PhaseShift). The elements of vector PhaseShift are in
+# @return a list of (time, theta). The elements of vector PhaseShift are in
 #   range of [0, 2pi), which defined as the radian difference between U and I
 #   using I - U.
 #
-phase_shift <- function(ac_signal, freq.f0=50, threshold=0) {
+phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
     period <- 1/freq.f0
-    time <- c()
+    ts <- c()
     phase <- c()    # between (-pi, pi]
 
     state.u <- NULL
     state.i <- NULL
 
-    for (i in 1:length(ac_signal$Time)) {
-        t <- ac_signal$Time[i]
-        state.u <- cross.put_next(state.u, t, ac_signal$U[i])
-        state.i <- cross.put_next(state.i, t, ac_signal$I[i])
-        #print(paste('t: ', t,
-        #            ' last u: ', state.u$last_value, ' (', state.u$cross_time, ') ',
-        #            ' last i: ', state.i$last_value, ' (', state.i$cross_time, ') ',
-        #            sep=''))
+    for (idx in 1:length(time)) {
+        t <- time[idx]
+        state.u <- cross.put_next(state.u, t, u[idx])
+        state.i <- cross.put_next(state.i, t, i[idx])
 
-        # i is not crossing
+        # idx is not crossing
         if (is.null(state.i$cross_time) || state.i$cross_time != t)
             next
 
-        # when i is crossing but u has not yet crossed
+        # when idx is crossing but u has not yet crossed
         if (is.null(state.u$cross_time))
             next
 
-        # now i is crossing and u is also crossing or crossed
+        # now idx is crossing and u is also crossing or crossed
         # at some time ago, we're able to do phase comparing
         diff <- t - state.u$cross_time
 
@@ -136,35 +139,35 @@ phase_shift <- function(ac_signal, freq.f0=50, threshold=0) {
         rad <- (diff/period)*2*pi
         if (rad > pi) rad <- rad - 2*pi
 
-        time <- append(time, t)
+        ts <- append(ts, t)
         phase <- append(phase, rad)
     }
-    li <- list(Time=time, PhaseShift=phase)
+    li <- list(time=ts, theta=phase)
     if (threshold == 0)
         return(li)
 
     t <- c()
     p <- c() 
     last.rad <- 0
-    len <- length(li$PhaseShift)
+    len <- length(li$theta)
 
-    for (i in 1:len) {
-        rad <- li$PhaseShift[i]
+    for (idx in 1:len) {
+        rad <- li$theta[idx]
 
         # calculate the difference within the boundary of (-pi, pi]
         #
         diff <- (rad - last.rad) %% (2*pi)
         if (diff >= pi) diff <- -(2*pi - diff)
 
-        if (i %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0
-            || i == len
+        if (idx %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0
+            || idx == len
             || abs(diff) > threshold) {
             last.rad <- rad
-            t <- append(t, li$Time[i])
+            t <- append(t, li$time[idx])
             p <- append(p, rad)
         }
     }
-    list(Time=t, PhaseShift=p)
+    list(time=t, theta=p)
 }
 
 # @k_start start value of the times of interquartile range
@@ -316,12 +319,11 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
     sapply(1:length(rms_names), function(m) {
         sapply(phase, function(n) {
                colname <- paste(rms_names[m], n, sep='')
-               li <- rms.reduce(
-                                rms.map(list(Time=data$Time,
-                                    Value=data[, colname] * scales[m])),
-                                    threshold=threshold[1])
+               r <- rms.map(time=data$Time,
+                            value=data[, colname] * scales[m])
+               li <- rms.reduce(r$time, r$rms, threshold=threshold[1])
                val_max <- max(data[, colname]) * scales[m]
-               plot(li$Time, li$Rms,
+               plot(li$time, li$rms,
                     main='',
                     xlab='Time (s)',
                     ylab=paste(rms_names[m], n, sep=''),
@@ -332,11 +334,11 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
     })
 
     sapply(phase, function(n) {
-           signal <- list(Time=data$Time,
-                          U=data[, paste('U', n, 'Scaled', sep='')],
-                          I=data[, paste('I', n, 'Scaled', sep='')])
-           li <- phase_shift(signal, threshold=threshold[3])
-           plot(li$Time, li$PhaseShift,
+           u <- data[, paste('U', n, 'Scaled', sep='')]
+           i <- data[, paste('I', n, 'Scaled', sep='')]
+           li <- phase_shift(time=data$Time,
+                             u=u, i=i, threshold=threshold[3])
+           plot(li$time, li$theta,
                 main='',
                 xlab='Time (s)',
                 ylab=expression(theta[u-i]),

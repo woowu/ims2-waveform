@@ -51,7 +51,7 @@ sapply(phase, function(n) {
             plot.ui_inst(data, c(t - PERIOD, t + PERIOD), phase=n:n)
         }, name=paste(namebase, '-oe-inst-', t, sep=''))
         save_plot(function() {
-            plot.ui_inst(data, c(t - 3, t + 3), phase=n:n)
+            plot.ui_inst(data, c(t - 5, t + 5), phase=n:n)
         }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''),
         png=T, svg=F)
     })
