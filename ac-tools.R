@@ -421,39 +421,54 @@ ui_oe.calc <- function (data, time_range=c(-Inf, Inf), phase) {
 # @ex extremers, a 3-layer list of <U|I>/L<n>/<time|value>
 #
 plot.ui_oe <- function(ol, ex, time_scale=NULL) {
-    umin <- unname(sapply(names(ol$U), function(n) {
-        min(ex$U[[n]]$value)
-    }))
-    umax <- unname(sapply(names(ol$U), function(n) {
-        max(ex$U[[n]]$value)
-    }))
-    imin <- unname(sapply(names(ol$I), function(n) {
-        min(ex$I[[n]]$value)
-    }))
-    imax <- unname(sapply(names(ol$I), function(n) {
-        max(ex$I[[n]]$value)
-    }))
+    # the min/max U/I need firstly looked up from the data
+    # then adjusted with some reasonable default scale.
+    #
+    oe <- list(ol=ol, ex=ex)
+    mm <- lapply(names(oe), function(ol_or_ex) {
+        li <- oe[[ol_or_ex]]
+        mm <- lapply(names(li), function(u_or_i) {
+            li <- li[[u_or_i]]
+            mm <- do.call(cbind, lapply(names(li),
+                        function(phase) {
+                            c(min(li[[phase]]$value), max(li[[phase]]$value))
+                        }))
+            c(min(mm[1,]), max(mm[2,]))
+        })
+        names(mm) <- names(li)
+        mm
+    })
+    names(mm) <- names(oe)
+    umin <- min(cbind(mm$ol$U, mm$ex$U)[1,])
+    umax <- max(cbind(mm$ol$U, mm$ex$U)[2,])
+    imin <- min(cbind(mm$ol$I, mm$ex$I)[1,])
+    imax <- max(cbind(mm$ol$I, mm$ex$I)[2,])
+
     umin <- min(umin, -VOLTAGE * sqrt(2))
     umax <- max(umax, VOLTAGE * sqrt(2))
     imin <- min(imin, -IB * sqrt(2))
     imax <- max(imax, IB * sqrt(2))
 
+    # check the min/max time in all the data if the caller not
+    # provided a time scale.
+    #
     if (is.null(time_scale)) {
-        time_scale <- c(0, 0)
-        time_scale[1] <- min(
-                    unname(sapply(names(ol$U), function(n) {
-                                      min(ex$U[[n]]$time)
-                    })),
-                    unname(sapply(names(ol$U), function(n) {
-                                      min(ex$I[[n]]$time)
-                    })))
-        time_scale[2] <- max(
-                    unname(sapply(names(ol$U), function(n) {
-                                      max(ex$U[[n]]$time)
-                    })),
-                    unname(sapply(names(ol$U), function(n) {
-                                      max(ex$I[[n]]$time)
-                    })))
+        mm <- lapply(names(oe), function(ol_or_ex) {
+            li <- oe[[ol_or_ex]]
+            mm <- lapply(names(li), function(u_or_i) {
+                li <- li[[u_or_i]]
+                mm <- do.call(cbind, lapply(names(li),
+                            function(phase) {
+                                c(min(li[[phase]]$time), max(li[[phase]]$time))
+                            }))
+                c(min(mm[1,]), max(mm[2,]))
+            })
+            names(mm) <- names(li)
+            mm
+        })
+        names(mm) <- names(oe)
+        mm <- do.call(cbind, list(mm$ol$U, mm$ol$I, mm$ex$U, mm$ex$I))
+        time_scale <- c(min[1,], max[2,])
     }
 
     par(bg='cornsilk', mfrow=c(2,length(ol$U)))

@@ -60,8 +60,6 @@ save_plot(function() {
                          time_scale=c(min(data$Time), max(data$Time)))
 }, name=paste(namebase, '-oe', sep=''))
 
-print(length(oe$ex$U$L2$time))
-print(oe)
 t <- lapply(names(oe), function(ol_or_ex) {
     li <- oe[[ol_or_ex]]
     t <- lapply(names(li), function(u_or_i) {
