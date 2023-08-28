@@ -60,6 +60,8 @@ save_plot(function() {
                          time_scale=c(min(data$Time), max(data$Time)))
 }, name=paste(namebase, '-oe', sep=''))
 
+print(paste('plot oe details'))
+
 t <- lapply(names(oe), function(ol_or_ex) {
     li <- oe[[ol_or_ex]]
     t <- lapply(names(li), function(u_or_i) {
@@ -76,30 +78,60 @@ t <- lapply(names(oe), function(ol_or_ex) {
 })
 names(t) <- names(oe)
 oe_time <- list(U=union(t$ol$U, t$ex$U), I=union(t$ol$I, t$ex$I))
-ui_time <- as.numeric(na.omit(union(oe_time$U, oe_time$I)))
+event_time <- sort(as.numeric(na.omit(union(oe_time$U, oe_time$I))))
 
-print(paste('plot oe details'))
-sapply(ui_time, function(t) {
-    if (! is.na(t)) {
-        marker.u=c()
-        marker.i=c()
-        if (! is.null(oe_time$U) && t %in% oe_time$U) marker.u=c(t)
-        if (! is.null(oe_time$I) && t %in% oe_time$I) marker.i=c(t)
-        save_plot(function() {
-            plot.ui_inst(data, c(t - PERIOD, t + PERIOD), phase=phase,
-                marker.u=marker.u,
-                marker.i=marker.i)
-        }, name=paste(namebase, '-oe-inst-', t, sep=''))
-        save_plot(function() {
-            plot.ui_inst(data, c(t - 7.5, t + 7.5), phase=phase,
-                marker.u=marker.u,
-                marker.i=marker.i)
-        }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''))
+# event_time could be a large set, but times in the set many crowed together
+# very closly. For what many times span no more than the width of our
+# observation window, we plot the data in a single plot. For this purpose,
+# we need to split the whole event_time set into groups.
+#
+grp <- list()
+window <- 3 * PERIOD
+der <- c(0, diff(event_time))
+acc_dist <- 0
+j <- 0
+for (i in 1:length(der)) {
+    acc_dist <- acc_dist + der[i]
+    if (acc_dist >= window) {
+        grp <- append(grp, list(event_time[j:(i-1)]))
+        acc_dist <- 0
+        j <- i
     }
+}
+grp <- append(grp, list(event_time[j:length(event_time)]))
+
+# for each time group, we plot a detail u/i waveform around the
+# median time of the group.
+#
+lapply(grp, function(g) {
+    marker.u=c()
+    marker.i=c()
+    for (t in g) {
+        if (t %in% oe_time$U)
+            marker.u <- append(marker.u, t)
+        if (t %in% oe_time$I)
+            marker.i <- append(marker.i, t)
+    }
+    m <- median(g)
+    grp_name <- paste(sprintf('%.4f', g[1]), '-',
+                      sprintf('%.4f', g[length(g)]),
+                      sep='')
+    save_plot(function() {
+        plot.ui_inst(data, c(m - window/2, m + window/2),
+                     phase=phase,
+                     marker.u=marker.u,
+                     marker.i=marker.i)
+    }, name=paste(namebase, '-oe-inst-', grp_name, sep=''))
+    save_plot(function() {
+        plot.ui_inst(data, c(m - 7.5, m + 7.5), phase=phase,
+                     marker.u=marker.u,
+                     marker.i=marker.i)
+    }, name=paste(namebase, '-oe-inst-', grp_name, '-long', sep=''),
+    png='T', svg='F')
 })
 
 print(paste('plot timeline'))
 save_plot(function() plot.rms_and_phase(data, phase=phase,
                                         threshold=c(.05, .1, .1745),
-                                        marker=ui_time),
+                                        marker=event_time),
           name=paste(namebase, '-timeline', sep=''))

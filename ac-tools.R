@@ -257,13 +257,16 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p',
                          marker.u=c(), marker.i=c()) {
     par(bg='cornsilk', mfrow=c(2,length(phase)))
 
+    color.u <- rgb(255, 165, 0, max=255, alpha=70, names='color.u')
+    color.i <- rgb(0, 0, 255, max=255, alpha=70, names='color.i')
+
     data <- subset(data, Time >= time_range[1])
     data <- subset(data, Time <= time_range[2])
 
     quantity <- c('U', 'I')
     min_scale <- c(VOLTAGE/10, IB/10)
     scales <- c(USCALE, ISCALE)
-    colors <- c('orange', 'blue')
+    colors <- c(color.u, color.i)
     marker <- list(marker.u, marker.i)
 
     sapply(1:length(quantity), function(m) {
@@ -272,14 +275,16 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p',
                    val_max <- max(data[, paste(quantity[m], n, sep='')] * scales[m])
                    miny <- min(-min_scale[m] * sqrt(2), val_min)
                    maxy <- max(min_scale[m] * sqrt(2), val_max)
-                   if (length(data$Time) <= 32000) {
+                   if (length(data$Time) <= Inf) {
                        plot(data$Time,
                             data[, paste(quantity[m], n, sep='')] * scales[m],
                             main='',
                             xlab='Time (s)',
                             ylab=paste(quantity[m], n, sep=''),
                             ylim=c(miny, maxy),
-                            col=colors[m], type=type)
+                            col=colors[m], type=type,
+                            panel.first=c(abline(h=c(0, val_min, val_max), lty=3),
+                                          abline(v=marker[[m]], lty=3)))
                    } else {
                        smoothScatter(data$Time,
                                      data[, paste(quantity[m], n, sep='')] * scales[m],
@@ -288,9 +293,9 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p',
                                      ylab=paste(quantity[m], n, sep=''),
                                      ylim=c(miny, maxy)
                                      )
+                        abline(h=c(0, val_min, val_max), lty=3)
+                        abline(v=marker[[m]], lty=3)
                    }
-                   abline(h=c(0, val_min, val_max), lty=3)
-                   abline(v=marker[[m]], lty=3)
         })
     })
 }
