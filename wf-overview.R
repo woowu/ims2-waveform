@@ -60,12 +60,17 @@ save_plot(function() {
                          time_scale=c(min(data$Time), max(data$Time)))
 }, name=paste(namebase, '-oe', sep=''))
 
+print(length(oe$ex$U$L2$time))
+print(oe)
 t <- lapply(names(oe), function(ol_or_ex) {
     li <- oe[[ol_or_ex]]
     t <- lapply(names(li), function(u_or_i) {
         li <- li[[u_or_i]]
         unname(sapply(names(li), function(phase) {
-            li[[phase]]$time
+            if (length(li[[phase]]$time) > 0)
+                li[[phase]]$time
+            else
+                c(NA)
         }))
     })
     names(t) <- names(li)
@@ -73,24 +78,26 @@ t <- lapply(names(oe), function(ol_or_ex) {
 })
 names(t) <- names(oe)
 oe_time <- list(U=union(t$ol$U, t$ex$U), I=union(t$ol$I, t$ex$I))
-ui_time <- union(oe_time$U, oe_time$I)
+ui_time <- as.numeric(na.omit(union(oe_time$U, oe_time$I)))
 
 print(paste('plot oe details'))
 sapply(ui_time, function(t) {
-    marker.u=c()
-    marker.i=c()
-    if (t %in% oe_time$U) marker.u=c(t)
-    if (t %in% oe_time$I) marker.i=c(t)
-    save_plot(function() {
-        plot.ui_inst(data, c(t - PERIOD, t + PERIOD), phase=phase,
-            marker.u=marker.u,
-            marker.i=marker.i)
-    }, name=paste(namebase, '-oe-inst-', t, sep=''))
-    save_plot(function() {
-        plot.ui_inst(data, c(t - 7.5, t + 7.5), phase=phase,
-            marker.u=marker.u,
-            marker.i=marker.i)
-    }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''))
+    if (! is.na(t)) {
+        marker.u=c()
+        marker.i=c()
+        if (! is.null(oe_time$U) && t %in% oe_time$U) marker.u=c(t)
+        if (! is.null(oe_time$I) && t %in% oe_time$I) marker.i=c(t)
+        save_plot(function() {
+            plot.ui_inst(data, c(t - PERIOD, t + PERIOD), phase=phase,
+                marker.u=marker.u,
+                marker.i=marker.i)
+        }, name=paste(namebase, '-oe-inst-', t, sep=''))
+        save_plot(function() {
+            plot.ui_inst(data, c(t - 7.5, t + 7.5), phase=phase,
+                marker.u=marker.u,
+                marker.i=marker.i)
+        }, name=paste(namebase, '-oe-inst-', t, '-long', sep=''))
+    }
 })
 
 print(paste('plot timeline'))
