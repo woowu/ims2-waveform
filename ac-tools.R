@@ -10,6 +10,12 @@ VOLTAGE = 230
 IMAX = 100
 IB = 10
 
+color.u <- 'darkorange1'
+color.i <- 'blue2'
+color.u.alpha <- rgb(1, .498, 0, alpha=.7)   # darkorange1 + alpha
+color.i.alpha <- rgb(0, 0, .933, alpha=.7)     # blue2 + alpha
+color.oe_marker <- rgb(0, 0, 0, alpha=.35)
+
 # If I don't have a full period to work with, just
 # return NA values which can then be excluded later.
 # @v vector of data series
@@ -257,16 +263,17 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p',
                          marker.u=c(), marker.i=c()) {
     par(bg='cornsilk', mfrow=c(2,length(phase)))
 
-    color.u <- rgb(255, 165, 0, max=255, alpha=70, names='color.u')
-    color.i <- rgb(0, 0, 255, max=255, alpha=70, names='color.i')
-
     data <- subset(data, Time >= time_range[1])
     data <- subset(data, Time <= time_range[2])
 
     quantity <- c('U', 'I')
     min_scale <- c(VOLTAGE/10, IB/10)
     scales <- c(USCALE, ISCALE)
-    colors <- c(color.u, color.i)
+    if (nrow(data) > 2 * RATE) {
+        colors <- c(color.u.alpha, color.i.alpha)
+    } else {
+        colors <- c(color.u, color.i)
+    }
     marker <- list(marker.u, marker.i)
 
     sapply(1:length(quantity), function(m) {
@@ -275,27 +282,23 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p',
                    val_max <- max(data[, paste(quantity[m], n, sep='')] * scales[m])
                    miny <- min(-min_scale[m] * sqrt(2), val_min)
                    maxy <- max(min_scale[m] * sqrt(2), val_max)
-                   if (length(data$Time) <= Inf) {
-                       plot(data$Time,
-                            data[, paste(quantity[m], n, sep='')] * scales[m],
-                            main='',
-                            xlab='Time (s)',
-                            ylab=paste(quantity[m], n, sep=''),
-                            ylim=c(miny, maxy),
-                            col=colors[m], type=type,
-                            panel.first=c(abline(h=c(0, val_min, val_max), lty=3),
-                                          abline(v=marker[[m]], lty=3)))
-                   } else {
-                       smoothScatter(data$Time,
-                                     data[, paste(quantity[m], n, sep='')] * scales[m],
-                                     main='',
-                                     xlab='Time (s)',
-                                     ylab=paste(quantity[m], n, sep=''),
-                                     ylim=c(miny, maxy)
-                                     )
-                        abline(h=c(0, val_min, val_max), lty=3)
-                        abline(v=marker[[m]], lty=3)
-                   }
+                   plot(data$Time,
+                        data[, paste(quantity[m], n, sep='')] * scales[m],
+                        main='',
+                        xlab='Time (s)',
+                        ylab=paste(quantity[m], n, sep=''),
+                        ylim=c(miny, maxy),
+                        col=colors[m], type=type,
+                        panel.first=c(abline(h=c(0, val_min, val_max), lty=3),
+                                      abline(v=marker[[m]], lty=3)))
+                   #smoothScatter(data$Time,
+                   #              data[, paste(quantity[m], n, sep='')] * scales[m],
+                   #              main='',
+                   #              xlab='Time (s)',
+                   #              ylab=paste(quantity[m], n, sep=''),
+                   #              ylim=c(miny, maxy))
+                   #abline(h=c(0, val_min, val_max), lty=3)
+                   #abline(v=marker[[m]], lty=3)
         })
     })
 }
@@ -330,7 +333,6 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
                                marker=c(),
                                type='l') {
     par(bg='cornsilk', mfrow=c(3, length(phase)))
-    oecolor <- rgb(0, 0, 0, max=255, alpha=40, names='oe')
 
     data <- subset(data, Time >= time_range[1])
     data <- subset(data, Time <= time_range[2])
@@ -354,7 +356,7 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
                     ylab=paste(rms_names[m], n, sep=''),
                     ylim=c(0, max(val_max, max_rms[m])),
                     col=colors[m], type=type,
-                    panel.first=c(abline(v=marker, lty=3, col=oecolor)))
+                    panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
                abline(h=c(0, val_max), lty=3)
         })
     })
@@ -370,7 +372,7 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
                 ylab=expression(theta[u-i]),
                 ylim=c(-pi, pi),
                 col='seagreen', type=type,
-                panel.first=c(abline(v=marker, lty=3, col=oecolor)))
+                panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
            abline(h=c(0, pi/2, -pi/2), lty=3)
     })
 }
