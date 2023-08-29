@@ -104,6 +104,7 @@ grp <- append(grp, list(event_time[j:length(event_time)]))
 # median time of the group.
 #
 lapply(grp, function(g) {
+    long_window <- 15
     marker.u=c()
     marker.i=c()
     for (t in g) {
@@ -123,7 +124,7 @@ lapply(grp, function(g) {
                      marker.i=marker.i)
     }, name=paste(namebase, '-oe-inst-', grp_name, sep=''))
     save_plot(function() {
-        plot.ui_inst(data, c(m - 7.5, m + 7.5), phase=phase,
+        plot.ui_inst(data, c(m - long_window/2, m + long_window/2), phase=phase,
                      marker.u=marker.u,
                      marker.i=marker.i)
     }, name=paste(namebase, '-oe-inst-', grp_name, '-long', sep=''),
