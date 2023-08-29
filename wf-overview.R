@@ -3,6 +3,7 @@ library(optparse)
 
 VOLTAGE = 230
 IMAX = 100
+IB = 10
 PERIOD = 0.02
 
 option_list = list(

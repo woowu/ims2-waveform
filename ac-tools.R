@@ -237,6 +237,26 @@ cut_time <- function(d, t, ncycles=10, align=.5) {
     subset(d, Time >= intvl[1] & Time <= intvl[2])
 }
 
+u_i_range_of_all_phases <- function(data) {
+    li <- lapply(c('U', 'I'), function(q) {
+               lapply(1:3, function(n) {
+                          col <- paste(q, n, 'Scaled', sep='')
+                          c(min(data[, col]), max(data[, col]))
+               })
+    })
+    names(li) <- c('u', 'i')
+    list(u=c(min(do.call(cbind, li$u)[1,]), max(do.call(cbind, li$u)[2,])),
+         i=c(min(do.call(cbind, li$i)[1,]), max(do.call(cbind, li$i)[2,])))
+}
+
+ui_value_scale_to_plot_scale <- function(min_max) {
+    if (min_max$u[1] > -VOLTAGE) min_max$u[1] <- min_max$u[1] * 1.1
+    if (min_max$u[2] < VOLTAGE) min_max$u[2] <- min_max$u[2] * 1.1
+    if (min_max$i[1] > -IB) min_max$i[1] <- min_max$u[1] * 1.1
+    if (min_max$i[2] < IB) min_max$i[2] <- min_max$u[2] * 1.1
+    min_max
+}
+
 read_wf <- function(filename) {
     d <- read.csv(filename)
     if ('Seqno' %in% names(d)) {
@@ -338,14 +358,18 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
     data <- subset(data, Time <= time_range[2])
     if (nrow(data) < SAMPLES_PER_PERIOD) stop('data size is not enough')
 
-    rms_names <- c('U', 'I')
+    ui_mm <- u_i_range_of_all_phases(data)
+    ui_mm.scale <- ui_value_scale_to_plot_scale(ui_mm)
+
+    q <- c('U', 'I')
+    qq <- c('u', 'i')
     scales <- c(USCALE, ISCALE)
     colors <- c('orange', 'blue')
     max_rms <- c(VOLTAGE, IMAX)
 
-    sapply(1:length(rms_names), function(m) {
+    sapply(1:length(q), function(m) {
         sapply(phase, function(n) {
-               colname <- paste(rms_names[m], n, sep='')
+               colname <- paste(q[m], n, sep='')
                r <- rms.map(time=data$Time,
                             value=data[, colname] * scales[m])
                li <- rms.reduce(r$time, r$rms, threshold=threshold[1])
@@ -353,11 +377,11 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
                plot(li$time, li$rms,
                     main='',
                     xlab='Time (s)',
-                    ylab=paste(rms_names[m], n, sep=''),
-                    ylim=c(0, max(val_max, max_rms[m])),
+                    ylab=paste(q[m], n, sep=''),
+                    ylim=c(0, ui_mm.scale[[qq[m]]][2]),
                     col=colors[m], type=type,
                     panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
-               abline(h=c(0, val_max), lty=3)
+               abline(h=c(0, ui_mm[[qq[m]]][2]), lty=3)
         })
     })
 
@@ -366,14 +390,20 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
            i <- data[, paste('I', n, 'Scaled', sep='')]
            li <- phase_shift(time=data$Time,
                              u=u, i=i, threshold=threshold[3])
+           pos1 <- seq(-pi, pi, by=pi/6)
+           pos <- seq(-pi, pi, by=pi/2)
+           tickmark <- expression(-pi, '', 0, '', pi)
            plot(li$time, li$theta,
                 main='',
                 xlab='Time (s)',
                 ylab=expression(theta[u-i]),
                 ylim=c(-pi, pi),
+                yaxt='none',
                 col='seagreen', type=type,
                 panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
-           abline(h=c(0, pi/2, -pi/2), lty=3)
+           axis(2, at=pos1, label=F, tck=-.015)
+           axis(2, at=pos, label=tickmark, tck=-.03)
+           abline(h=pos, lty=3)
     })
 }
 
