@@ -16,6 +16,14 @@ color.u.alpha <- rgb(1, .498, 0, alpha=.7)   # darkorange1 + alpha
 color.i.alpha <- rgb(0, 0, .933, alpha=.7)     # blue2 + alpha
 color.oe_marker <- rgb(0, 0, 0, alpha=.35)
 
+# time in a AC time series should have evenly spaced times.
+# if there is a jump, it means one or more samples lost.
+#
+detect_lost <- function(time) {
+    dd <- c(0, 0, diff(diff(time)))
+    time[which(dd > 1e-6)]
+}
+
 # If I don't have a full period to work with, just
 # return NA values which can then be excluded later.
 # @v vector of data series
@@ -181,41 +189,52 @@ phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
 #   original data size
 # @kp every next iteration, the k will increase kp * error
 #
-outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75) {
+outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
     der <- c(0, diff(value))
 
     k <- k_start
-    pk <- k
+    k.prev <- k
     sp <- max(stop * length(time), 5)
-    cnt <- 0
     err <- Inf
+    ix.hist <- c()
+    cnt <- 0
 
-    while (cnt < 100) {
+    while (T) {
         ix <- which(abs(der) > k * IQR(der))
+
+        # if error is enough smll, stop searching
+        #
         err <- (length(ix) - sp)/sp
         if (abs(err) < .05) break
 
-        # calculate the next k using proportional way
-        #
-        pk <- k
-        k <- k + max(min(err * kp, 2), -2)
+        ix.hist <- append(ix.hist, length(ix))
+        if (length(ix.hist) > 20) {
+            ix.hist <- ix.hist[-1]
+            print(sum(diff(ix.hist)))
+            if (sum(diff(ix.hist)) < 1) break
+        }
 
-        # stop if algorithm keep bouncing
+        # increase k in proportional to the error
         #
-        if (pk * k < 0) {
-            bouncing <- bouncing + 1
-        } else
-            bouncing <- 0
-        if (bouncing == 3) break
+        k.prev <- k
+        k <- k + max(min(err * kp, 2), -2)
 
         cnt <- cnt + 1
     }
-    #print(c(sp, length(ix), k, err, cnt))
+    print(paste('outliers:', paste(c(sp, length(ix), k, err, cnt), collapse=',')))
 
     ol.time <- rep(NA, length(ix))
     ol.value <- rep(NA, length(ix))
+
     ol.time[ix] <- time[ix] 
     ol.value[ix] <- value[ix] 
+
+    if (! is.null(skip_time)) {
+        excl_idx <- which(ol.time %in% skip_time)
+        ol.time[excl_idx] <- NA
+        ol.value[excl_idx] <- NA
+    }
+
     list(time=ol.time, value=ol.value)
 }
 
@@ -425,7 +444,7 @@ ui_oe.calc <- function (data, time_range=c(-Inf, Inf), phase) {
 
             print(paste('calculate outlier on phase ',
                         n, ' for ', type[m], sep=''))
-            li <- outlier(data$Time, value)
+            li <- outlier(data$Time, value, skip_time=detect_lost(data$Time))
             li$time <- as.numeric(na.omit(li$time))
             li$value <- as.numeric(na.omit(li$value))
             li

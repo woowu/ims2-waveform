@@ -31,6 +31,9 @@ if (is.null(opt$phase)) {
     phase <- opt$phase:opt$phase
 }
 
+write.csv(data.frame(Time=detect_lost(data$Time)),
+          paste(namebase, '-lost.csv', sep=''), row.names=F)
+
 print(paste('plot histograms'))
 save_plot(function() plot.ui_hist(data, phase=phase),
           name=paste(namebase, '-hist', sep=''))
