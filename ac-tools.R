@@ -1,11 +1,11 @@
 library(tidyverse)
-#library(dplR)
+library(svglite)
 
 USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
 RATE <- 6.4e3
 SAMPLES_PER_PERIOD <- 128
-MAX_TIME_POINTS_TO_PLOT <- 672 # don't save pnt more than this size
+MAX_PLOT_WIDTH <- 400
 VOLTAGE = 230
 IMAX = 100
 IB = 10
@@ -72,7 +72,7 @@ rms.reduce <- function(time, rms, threshold=0) {
 
         # the first, last and those deviated from the last value for over
         # the threshold points are output
-        if (i %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0 
+        if (i %% floor(len/MAX_PLOT_WIDTH) == 0 
             || i == len
             || is.nan(last * threshold)
             || abs((val - last)) > last * threshold) {
@@ -173,7 +173,7 @@ phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
         diff <- (rad - last.rad) %% (2*pi)
         if (diff >= pi) diff <- -(2*pi - diff)
 
-        if (idx %% floor(len/MAX_TIME_POINTS_TO_PLOT) == 0
+        if (idx %% floor(len/MAX_PLOT_WIDTH) == 0
             || idx == len
             || abs(diff) > threshold) {
             last.rad <- rad
@@ -308,12 +308,12 @@ read_wf <- function(filename) {
 # @marker.i a vector contains time values which should be used to draw vertical
 #   ablines on I plot
 #
-plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p',
+plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
                          marker.u=c(), marker.i=c()) {
     par(bg='cornsilk', mfrow=c(2,length(phase)))
 
-    data <- subset(data, Time >= time_range[1])
-    data <- subset(data, Time <= time_range[2])
+    data <- subset(data, Time >= range[1])
+    data <- subset(data, Time <= range[2])
 
     quantity <- c('U', 'I')
     min_scale <- c(VOLTAGE/10, IB/10)
@@ -354,11 +354,11 @@ plot.ui_inst <- function(data, time_range=c(-Inf, Inf), phase, type='p',
 
 # Plot U/I histogram
 #
-plot.ui_hist <- function(data, time_range=c(-Inf, Inf), phase) { 
+plot.ui_hist <- function(data, range=c(-Inf, Inf), phase) { 
     par(bg='cornsilk', mfrow=c(2, length(phase)))
 
-    data <- subset(data, Time >= time_range[1])
-    data <- subset(data, Time <= time_range[2])
+    data <- subset(data, Time >= range[1])
+    data <- subset(data, Time <= range[2])
     if (nrow(data) == 0) stop('empty data')
 
     sapply(phase, function(n) {
@@ -377,14 +377,14 @@ plot.ui_hist <- function(data, time_range=c(-Inf, Inf), phase) {
 # by a change rage threshold
 # @threshold sample reducing threshold of U, I and Phase shift 
 #
-plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
+plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                                threshold=c(0, 0, 0),
                                marker=c(),
                                type='l') {
     par(bg='cornsilk', mfrow=c(3, length(phase)))
 
-    data <- subset(data, Time >= time_range[1])
-    data <- subset(data, Time <= time_range[2])
+    data <- subset(data, Time >= range[1])
+    data <- subset(data, Time <= range[2])
     if (nrow(data) < SAMPLES_PER_PERIOD) stop('data size is not enough')
 
     ui_mm <- u_i_range_of_all_phases(data)
@@ -440,9 +440,9 @@ plot.rms_and_phase <- function(data, time_range=c(-Inf, Inf), phase,
 # then return ol and oe list.
 # @return a 4-layer list of <ol|ex>/<U|I>/L<n>/<time|value>
 #
-ui_oe.calc <- function (data, time_range=c(-Inf, Inf), phase) {
-    data <- subset(data, Time >= time_range[1])
-    data <- subset(data, Time <= time_range[2])
+ui_oe.calc <- function (data, range=c(-Inf, Inf), phase) {
+    data <- subset(data, Time >= range[1])
+    data <- subset(data, Time <= range[2])
 
     type <- c('U', 'I')
     phase_name <- paste('L', phase, sep='')
@@ -569,34 +569,20 @@ plot.ui_oe <- function(ol, ex, time_scale=NULL) {
     NULL
 }
 
-save_plot <- function(plot, name, dir='.', w=480, h=480, png=F, svg=T) {
+save_plot <- function(plot, name, dir='.',
+                      width=480, height=480, png=F, svg=T) {
     if (svg) {
-        svg(paste(dir, '/', name, '.svg', sep=''))
+        svglite(paste(dir, '/', name, '.svg', sep=''),
+            width=width/96, height=height/96)
         plot()
         dev.off()
     }
     if (png) {
-        png(paste(dir, '/', name, '.png', sep=''), width=w, height=h, unit='px')
+        png(paste(dir, '/', name, '.png', sep=''),
+            width=width, height=height, unit='px')
         plot()
         dev.off()
     }
-}
-
-dev_new <- function(n=1, m=1, name = NULL) {
-    if (! is.null(name)) {
-        basename <- paste(head(str_split(name, '\\.')[[1]], -1),
-                         collapse='.')
-        ext <- tail(str_split(name, '\\.')[[1]], 1)
-        if (ext == 'png') {
-            png(paste(basename, ext, sep=''))
-        } else if (ext == 'svg') {
-            svg(paste(basename, ext, sep=''))
-        } else if (ext == 'pdf') {
-            pdf(paste(basename, ext, sep=''))
-        }
-    } else
-        dev.new()
-    par(bg='cornsilk', mfrow=c(n, m))
 }
 
 # @x the phase difference betwee voltage and current, defined as phase of
