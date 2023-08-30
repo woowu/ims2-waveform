@@ -46,7 +46,7 @@ sapply(names(oe), function(ol_or_ex) {
         li <- li[[u_or_i]]
         sapply(names(li), function(phase) {
             li <- li[[phase]]
-            if (length(li$time)) {
+            if (! is.null(li$time) && length(li$time)) {
                 fname=paste(namebase, '-', ol_or_ex,
                            '-', u_or_i,
                            substr(phase, 2, 2),
@@ -70,19 +70,39 @@ t <- lapply(names(oe), function(ol_or_ex) {
     li <- oe[[ol_or_ex]]
     t <- lapply(names(li), function(u_or_i) {
         li <- li[[u_or_i]]
-        unname(sapply(names(li), function(phase) {
-            if (length(li[[phase]]$time) > 0)
-                li[[phase]]$time
-            else
-                c(NA)
-        }))
+        lapply(names(li), function(phase) {
+                   li[[phase]]$time
+        })
     })
     names(t) <- names(li)
     t
 })
 names(t) <- names(oe)
-oe_time <- list(U=union(t$ol$U, t$ex$U), I=union(t$ol$I, t$ex$I))
-event_time <- sort(as.numeric(na.omit(union(oe_time$U, oe_time$I))))
+
+ol_u <- c()
+if (! is.null(t$ol$U)) {
+    ol_u <- unique(do.call(c, t$ol$U))
+    ol_u <- ol_u[! is.na(ol_u)]
+    if (length(ol_u) == 0) ol_u <- c()
+}
+ex_u <- c()
+if (! is.null(t$ol$U)) {
+    ex_u <- unique(do.call(c, t$ex$U))
+    ex_u <- ex_u[! is.na(ex_u)]
+    if (length(ex_u) == 0) ex_u <- c()
+}
+all_u <- unique(c(ol_u, ex_u))
+
+ol_i <- unique(do.call(c, t$ol$I))
+ol_i <- ol_i[! is.na(ol_i)]
+if (length(ol_i) == 0) ol_i <- c()
+ex_i <- unique(do.call(c, t$ex$I))
+ex_i <- ex_i[! is.na(ex_i)]
+if (length(ex_i) == 0) ex_i <- c()
+all_i <- unique(c(ol_i, ex_i))
+
+oe_time <- list(u=all_u, i=all_i)
+event_time <- sort(unique(c(all_u, all_i)))
 
 # event_time could be a large set, but times in the set many crowed together
 # very closly. For what many times span no more than the width of our
@@ -112,9 +132,9 @@ lapply(grp, function(g) {
     marker.u=c()
     marker.i=c()
     for (t in g) {
-        if (t %in% oe_time$U)
+        if (t %in% oe_time$u)
             marker.u <- append(marker.u, t)
-        if (t %in% oe_time$I)
+        if (t %in% oe_time$i)
             marker.i <- append(marker.i, t)
     }
     m <- median(g)

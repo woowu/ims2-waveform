@@ -202,16 +202,25 @@ outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
     while (T) {
         ix <- which(abs(der) > k * IQR(der))
 
-        # if error is enough smll, stop searching
+        # stop if error is enough small
         #
         err <- (length(ix) - sp)/sp
-        if (abs(err) < .05) break
+        if (abs(err) < .05) {
+            print(paste('outlier searching stoped for sp reached. error:', err))
+            break
+        }
 
+        # stop when numbers of outliers converge to a value for a while
+        #
         ix.hist <- append(ix.hist, length(ix))
         if (length(ix.hist) > 20) {
             ix.hist <- ix.hist[-1]
-            print(sum(diff(ix.hist)))
-            if (sum(diff(ix.hist)) < 1) break
+            delta <- 2
+            if (abs(sum(diff(ix.hist))) < delta) {
+                print('outlier searching stopped for result converged')
+                print(ix.hist)
+                break
+            }
         }
 
         # increase k in proportional to the error
@@ -233,6 +242,7 @@ outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
         excl_idx <- which(ol.time %in% skip_time)
         ol.time[excl_idx] <- NA
         ol.value[excl_idx] <- NA
+        print(paste('skipped', length(excl_idx), ' sample losting'))
     }
 
     list(time=ol.time, value=ol.value)
@@ -444,10 +454,16 @@ ui_oe.calc <- function (data, time_range=c(-Inf, Inf), phase) {
 
             print(paste('calculate outlier on phase ',
                         n, ' for ', type[m], sep=''))
-            li <- outlier(data$Time, value, skip_time=detect_lost(data$Time))
-            li$time <- as.numeric(na.omit(li$time))
-            li$value <- as.numeric(na.omit(li$value))
-            li
+            li <- outlier(data$Time, value,
+                          skip_time=detect_lost(data$Time))
+            li$time <- li$time[! is.na(li$time)]
+            li$value <- li$value[! is.na(li$value)]
+
+            # when in null values, keep the list in the same form
+            if (length(li$time) == 0)
+                return(list(time=c(), value=c()))
+            else
+                return(li)
         })
         names(li) <- phase_name
         li
@@ -458,15 +474,17 @@ ui_oe.calc <- function (data, time_range=c(-Inf, Inf), phase) {
         li <- lapply(phase, function(n) {
             value <- data[, paste(type[m], n, 'Scaled', sep='')]
 
-            print(paste('calculate extermers on phase ',
+            print(paste('calculate extremers on phase ',
                         n, ' for ', type[m], sep=''))
             li <- extremer(data$Time, value, threshold=ex_threshold[m])
-            li$time <- as.numeric(na.omit(li$time))
-            li$value <- as.numeric(na.omit(li$value))
-            li
+            li$time <- li$time[! is.na(li$time)]
+            if (length(li$time) == 0) li$time <- c()
+            li$value <- li$value[! is.na(li$value)]
+            if (length(li$value) == 0) li$value <- c()
+            return(li)
         })
         names(li) <- phase_name
-        li
+        return(li)
     })
     names(ex) <- type
     list(ol=ol, ex=ex)
