@@ -218,7 +218,9 @@ outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
         if (length(ix.hist) > 20) {
             ix.hist <- ix.hist[-1]
             delta <- 2
-            if (abs(sum(diff(ix.hist))) < delta) {
+            if (abs(sum(diff(ix.hist))) < delta
+                    && ix.hist[length(ix.hist)]
+                    <= ix.hist[length(ix.hist) - 1]) {
                 print('outlier searching stopped for result converged')
                 print(ix.hist)
                 break
@@ -317,7 +319,7 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
     data <- subset(data, Time >= range[1])
     data <- subset(data, Time <= range[2])
 
-    quantity <- c('U', 'I')
+    q <- c('U', 'I')
     min_scale <- c(VOLTAGE/10, IB/10)
     scales <- c(USCALE, ISCALE)
     if (nrow(data) > 2 * RATE) {
@@ -327,26 +329,26 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
     }
     marker <- list(marker.u, marker.i)
 
-    sapply(1:length(quantity), function(m) {
+    sapply(1:length(q), function(m) {
         sapply(phase, function(n) {
-                   val_min <- min(data[, paste(quantity[m], n, sep='')] * scales[m])
-                   val_max <- max(data[, paste(quantity[m], n, sep='')] * scales[m])
+                   val_min <- min(data[, paste(q[m], n, sep='')] * scales[m])
+                   val_max <- max(data[, paste(q[m], n, sep='')] * scales[m])
                    miny <- min(-min_scale[m] * sqrt(2), val_min)
                    maxy <- max(min_scale[m] * sqrt(2), val_max)
                    plot(data$Time,
-                        data[, paste(quantity[m], n, sep='')] * scales[m],
-                        main='',
+                        data[, paste(q[m], n, sep='')] * scales[m],
+                        main=paste(q[m], ' inst - L', n, sep=''),
                         xlab='Time (s)',
-                        ylab=paste(quantity[m], n, sep=''),
+                        ylab=paste(q[m], n, sep=''),
                         ylim=c(miny, maxy),
                         col=colors[m], type=type,
                         panel.first=c(abline(h=c(0, val_min, val_max), lty=3),
                                       abline(v=marker[[m]], lty=3)))
                    #smoothScatter(data$Time,
-                   #              data[, paste(quantity[m], n, sep='')] * scales[m],
-                   #              main='',
+                   #              data[, paste(q[m], n, sep='')] * scales[m],
+                   #              main=paste(q, ' inst - L', n, sep=''),
                    #              xlab='Time (s)',
-                   #              ylab=paste(quantity[m], n, sep=''),
+                   #              ylab=paste(q[m], n, sep=''),
                    #              ylim=c(miny, maxy))
                    #abline(h=c(0, val_min, val_max), lty=3)
                    #abline(v=marker[[m]], lty=3)
@@ -365,12 +367,12 @@ plot.ui_hist <- function(data, range=c(-Inf, Inf), phase) {
 
     sapply(phase, function(n) {
                hist(data[, paste('U', n, sep='')] * USCALE,
-                    xlab='Voltage (V)', main='')
+                    xlab='Voltage (V)', main=paste('U hist - L', n, sep=''))
                }
     )
     sapply(phase, function(n) {
                hist(data[, paste('I', n, sep='')] * ISCALE,
-                    xlab='Current (A)', main='')
+                    xlab='Current (A)', main=paste('I hist - L', n, sep=''))
                }
     )
 }
@@ -423,7 +425,7 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
         sapply(phase, function(n) {
                v <- li.rms[[m]][[paste('l', n, sep='')]]
                plot(v$time, v$rms,
-                    main='',
+                    main=paste(q[m], ' RMS - L', n, sep=''),
                     xlab='Time (s)',
                     ylab=paste(q[m], n, sep=''),
                     ylim=c(0, minmax[[m]][2] * 1.05),
@@ -441,7 +443,7 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
            pos <- seq(-pi, pi, by=pi/2)
            tickmark <- expression(-pi, '', 0, '', pi)
            plot(li$time, li$theta,
-                main='',
+                main=paste('Phase - L', n, sep=''),
                 xlab='Time (s)',
                 ylab=expression(theta[u-i]),
                 ylim=c(-pi * 1.05, pi * 1.05),
@@ -564,24 +566,25 @@ plot.ui_oe <- function(ol, ex, time_scale=NULL, phase) {
         time_scale <- c(min[1,], max[2,])
     }
 
-    par(bg='cornsilk', mfrow=c(2,length(ol$U)))
+    par(bg='cornsilk', mfrow=c(2,length(phase)))
 
     y_scale <- list(U=c(umin, umax), I=c(imin, imax))
-    type <- c('U', 'I')
+    q <- c('U', 'I')
     colors <- c('orange', 'blue')
 
-    # n is 'L1', 'L2', or 'L3'
-    sapply(names(ol$U), function(n) {
+    sapply(c('L1', 'L2', 'L3')[phase], function(n) {
         # m is index of c('U', 'I')
-        sapply(1:length(type), function(m) {
-            plot(ol[[type[m]]][[n]]$time, ol[[type[m]]][[n]]$value,
-                 main='',
+        sapply(1:length(q), function(m) {
+            plot(ol[[q[m]]][[n]]$time, ol[[q[m]]][[n]]$value,
+                 main=paste(q[m],
+                            ' outliers - L',
+                            paste(phase, collapse=','), sep=''),
                  xlab='Time (s)',
-                 ylab=paste(type[m], substr(n, 2, 2), sep=''),
+                 ylab=paste(q[m], substr(n, 2, 2), sep=''),
                  xlim=time_scale,
-                 ylim=y_scale[[type[m]]],
-                 col=colors[m], type='p')
-            points(ex[[type[m]]][[n]]$time, ex[[type[m]]][[n]]$value, pch=8, col='red')
+                 ylim=y_scale[[q[m]]],
+                 col=colors[m], q='p')
+            points(ex[[q[m]]][[n]]$time, ex[[q[m]]][[n]]$value, pch=8, col='red')
             abline(h=0, lty=3)
         })
     })

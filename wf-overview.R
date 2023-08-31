@@ -61,13 +61,13 @@ sapply(names(oe), function(ol_or_ex) {
 })
 
 print(paste('plot oe'))
-save_plot(function() {
-              plot.ui_oe(oe$ol, oe$ex,
-                         phase=phase,
-                         time_scale=c(min(data$Time), max(data$Time)))
-}, name=paste(namebase, '-oe', sep=''))
-
-print(paste('plot oe details'))
+sapply(phase, function(n) {
+    save_plot(function() {
+                  plot.ui_oe(oe$ol, oe$ex,
+                             phase=n:n,
+                             time_scale=c(min(data$Time), max(data$Time)))
+    }, name=paste(namebase, '-oe-l', n, sep=''))
+})
 
 t <- lapply(names(oe), function(ol_or_ex) {
     li <- oe[[ol_or_ex]]
@@ -114,6 +114,16 @@ for (i in 1:length(der)) {
 }
 grp <- append(grp, list(event_time[j:length(event_time)]))
 
+print(paste('plot timeline'))
+sapply(phase, function(n) {
+    save_plot(function() plot.rms_and_phase(data, phase=n:n,
+                                            threshold=c(.05, .1, .1745),
+                                            marker=event_time),
+              name=paste(namebase, '-timeline-l', n, sep=''))
+})
+
+print(paste('plot oe details'))
+
 # for each time group, we plot a detail u/i waveform around the
 # median time of the group.
 #
@@ -150,12 +160,4 @@ lapply(grp, function(g) {
                       name=paste(namebase, '-oe-inst-', grp_name, '-long-l', n, sep=''),
                       png='T', svg='F')
     })
-})
-
-print(paste('plot timeline'))
-sapply(phase, function(n) {
-    save_plot(function() plot.rms_and_phase(data, phase=n:n,
-                                            threshold=c(.05, .1, .1745),
-                                            marker=event_time),
-              name=paste(namebase, '-timeline-l', n, sep=''))
 })
