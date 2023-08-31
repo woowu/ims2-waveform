@@ -119,6 +119,7 @@ sapply(phase, function(n) {
     save_plot(function() plot.rms_and_phase(data, phase=n:n,
                                             threshold=c(.05, .1, .1745),
                                             marker=event_time),
+              width=640, height=640, 
               name=paste(namebase, '-timeline-l', n, sep=''))
 })
 

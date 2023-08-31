@@ -128,7 +128,7 @@ outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
         # stop if error is enough small
         #
         err <- (length(ix) - sp)/sp
-        if (abs(err) < .05) {
+        if (abs(err) < .01) {
             print(paste('outlier searching stoped for sp reached. error:', err))
             break
         }
@@ -138,10 +138,8 @@ outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
         ix.hist <- append(ix.hist, length(ix))
         if (length(ix.hist) > 20) {
             ix.hist <- ix.hist[-1]
-            delta <- 2
-            if (abs(sum(diff(ix.hist))) < delta
-                    && ix.hist[length(ix.hist)]
-                    <= ix.hist[length(ix.hist) - 1]) {
+            delta <- 1
+            if (abs(sum(diff(ix.hist))) < delta) {
                 print('outlier searching stopped for result converged')
                 print(ix.hist)
                 break
@@ -154,6 +152,12 @@ outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
         k <- k + max(min(err * kp, 2), -2)
 
         cnt <- cnt + 1
+        if (cnt %% 20 == 0) {
+            print(paste('outlier searching: cnt',
+                        cnt, 'sp', sp, 'len(ix)', length(ix),
+                        'error', err, 'k', k.prev))
+            print(ix.hist)
+        }
     }
     print(paste('outliers:', paste(c(sp, length(ix), k, err, cnt), collapse=',')))
 
