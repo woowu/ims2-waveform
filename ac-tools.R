@@ -72,7 +72,8 @@ rms.reduce <- function(time, rms, threshold=0) {
 
         # the first, last and those deviated from the last value for over
         # the threshold points are output
-        if (i %% floor(len/MAX_PLOT_WIDTH) == 0 
+        if ((len > MAX_PLOT_WIDTH) && i %% floor(len/MAX_PLOT_WIDTH) == 0 
+            || i == 1
             || i == len
             || is.nan(last * threshold)
             || abs((val - last)) > last * threshold) {
@@ -173,7 +174,8 @@ phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
         diff <- (rad - last.rad) %% (2*pi)
         if (diff >= pi) diff <- -(2*pi - diff)
 
-        if (idx %% floor(len/MAX_PLOT_WIDTH) == 0
+        if (len >= MAX_PLOT_WIDTH && idx %% floor(len/MAX_PLOT_WIDTH) == 0
+            || idx == 1 
             || idx == len
             || abs(diff) > threshold) {
             last.rad <- rad
@@ -387,30 +389,46 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
     data <- subset(data, Time <= range[2])
     if (nrow(data) < SAMPLES_PER_PERIOD) stop('data size is not enough')
 
-    ui_mm <- u_i_range_of_all_phases(data)
-    ui_mm.scale <- ui_value_scale_to_plot_scale(ui_mm)
-
     q <- c('U', 'I')
     qq <- c('u', 'i')
     scales <- c(USCALE, ISCALE)
-    colors <- c('orange', 'blue')
-    max_rms <- c(VOLTAGE, IMAX)
 
-    sapply(1:length(q), function(m) {
-        sapply(phase, function(n) {
+    li.rms <- lapply(1:length(q), function(m) {
+        li <- lapply(phase, function(n) {
                colname <- paste(q[m], n, sep='')
                r <- rms.map(time=data$Time,
                             value=data[, colname] * scales[m])
                li <- rms.reduce(r$time, r$rms, threshold=threshold[1])
-               val_max <- max(data[, colname]) * scales[m]
-               plot(li$time, li$rms,
+        })
+        names(li) <- paste('l', phase, sep='')
+        li
+    })
+    names(li.rms) <- qq
+
+    li.mm <- lapply(1:length(qq), function(m) {
+        li <- lapply(phase, function(n) {
+                         val <- li.rms[[m]][[paste('l', n, sep='')]]$rms
+                         c(min(val), max(val))
+        })
+        names(li) <- paste('l', phase, sep='')
+        li
+    })
+    names(li.mm) <- qq
+
+    minmax <- list(u=c(min(do.call(cbind, li.mm$u)[1,]), max(do.call(cbind, li.mm$u)[2,])),
+         i=c(min(do.call(cbind, li.mm$i)[1,]), max(do.call(cbind, li.mm$i)[2,])))
+
+    colors <- c('orange', 'blue')
+    sapply(1:length(qq), function(m) {
+        sapply(phase, function(n) {
+               v <- li.rms[[m]][[paste('l', n, sep='')]]
+               plot(v$time, v$rms,
                     main='',
                     xlab='Time (s)',
                     ylab=paste(q[m], n, sep=''),
-                    ylim=c(0, ui_mm.scale[[qq[m]]][2]),
+                    ylim=c(0, minmax[[m]][2] * 1.05),
                     col=colors[m], type=type,
                     panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
-               abline(h=c(0, ui_mm[[qq[m]]][2]), lty=3)
         })
     })
 
@@ -426,13 +444,13 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                 main='',
                 xlab='Time (s)',
                 ylab=expression(theta[u-i]),
-                ylim=c(-pi, pi),
+                ylim=c(-pi * 1.05, pi * 1.05),
                 yaxt='none',
                 col='seagreen', type=type,
                 panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
            axis(2, at=pos1, label=F, tck=-.015)
            axis(2, at=pos, label=tickmark, tck=-.03)
-           abline(h=pos, lty=3)
+           abline(h=pos, lwd=0.2)
     })
 }
 
@@ -494,7 +512,7 @@ ui_oe.calc <- function (data, range=c(-Inf, Inf), phase) {
 # @ol outliers, a 3-layer list of <U|I>/L<n>/<time|value>
 # @ex extremers, a 3-layer list of <U|I>/L<n>/<time|value>
 #
-plot.ui_oe <- function(ol, ex, time_scale=NULL) {
+plot.ui_oe <- function(ol, ex, time_scale=NULL, phase) {
     # the min/max U/I need firstly looked up from the data
     # then adjusted with some reasonable default scale.
     #
@@ -503,9 +521,10 @@ plot.ui_oe <- function(ol, ex, time_scale=NULL) {
         li <- oe[[ol_or_ex]]
         mm <- lapply(names(li), function(u_or_i) {
             li <- li[[u_or_i]]
-            mm <- do.call(cbind, lapply(names(li),
-                        function(phase) {
-                            c(min(li[[phase]]$value), max(li[[phase]]$value))
+            ph <- names(li)[phase]
+            mm <- do.call(cbind, lapply(ph,
+                        function(p) {
+                            c(min(li[[p]]$value), max(li[[p]]$value))
                         }))
             c(min(mm[1,]), max(mm[2,]))
         })

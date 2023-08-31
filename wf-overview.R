@@ -31,14 +31,14 @@ if (is.null(opt$phase)) {
     phase <- opt$phase:opt$phase
 }
 
-dev.w <- length(phase) * 480
-
 write.csv(data.frame(Time=detect_lost(data$Time)),
           paste(namebase, '-lost.csv', sep=''), row.names=F)
 
 print(paste('plot histograms'))
-save_plot(function() plot.ui_hist(data, phase=phase),
-          name=paste(namebase, '-hist', width=dev.w, sep=''))
+sapply(phase, function(n) {
+    save_plot(function() plot.ui_hist(data, phase=n:n),
+              name=paste(namebase, '-hist-l', n, sep=''))
+})
 
 print(paste('calculate oe'))
 oe <- ui_oe.calc(data, phase=phase)
@@ -63,8 +63,9 @@ sapply(names(oe), function(ol_or_ex) {
 print(paste('plot oe'))
 save_plot(function() {
               plot.ui_oe(oe$ol, oe$ex,
+                         phase=phase,
                          time_scale=c(min(data$Time), max(data$Time)))
-}, width=dev.w, name=paste(namebase, '-oe', sep=''))
+}, name=paste(namebase, '-oe', sep=''))
 
 print(paste('plot oe details'))
 
@@ -132,28 +133,29 @@ lapply(grp, function(g) {
     grp_name <- paste(sprintf('%.4f', g[1]), '-',
                       sprintf('%.4f', g[length(g)]),
                       sep='')
-    save_plot(function() {
-                  plot.ui_inst(data, window, phase=phase,
-                               marker.u=marker.u,
-                               marker.i=marker.i)
-                      },
-                  width=dev.w,
-                  name=paste(namebase, '-oe-inst-', grp_name, sep=''))
+    sapply(phase, function(n) {
+        save_plot(function() {
+                      plot.ui_inst(data, window, phase=n:n,
+                                   marker.u=marker.u,
+                                   marker.i=marker.i)
+                          },
+                      name=paste(namebase, '-oe-inst-', grp_name, '-l', n, sep=''))
 
-    window <- c(min(g) - larger_margin, max(g) + larger_margin)
-    save_plot(function() {
-                  plot.ui_inst(data, window, phase=phase,
-                               marker.u=marker.u,
-                               marker.i=marker.i)
-                  },
-                  width=dev.w,
-                  name=paste(namebase, '-oe-inst-', grp_name, '-long', sep=''),
-                  png='T', svg='F')
+        window <- c(min(g) - larger_margin, max(g) + larger_margin)
+        save_plot(function() {
+                      plot.ui_inst(data, window, phase=n:n,
+                                   marker.u=marker.u,
+                                   marker.i=marker.i)
+                      },
+                      name=paste(namebase, '-oe-inst-', grp_name, '-long-l', n, sep=''),
+                      png='T', svg='F')
+    })
 })
 
 print(paste('plot timeline'))
-save_plot(function() plot.rms_and_phase(data, phase=phase,
-                                        threshold=c(.05, .1, .1745),
-                                        marker=event_time),
-          width=dev.w,
-          name=paste(namebase, '-timeline', sep=''))
+sapply(phase, function(n) {
+    save_plot(function() plot.rms_and_phase(data, phase=n:n,
+                                            threshold=c(.05, .1, .1745),
+                                            marker=event_time),
+              name=paste(namebase, '-timeline-l', n, sep=''))
+})
