@@ -6,6 +6,7 @@ ISCALE <- 4.61806e-3
 RATE <- 6.4e3
 SAMPLES_PER_PERIOD <- 128
 MAX_PLOT_WIDTH <- 400
+SYS_DPI <- 96
 VOLTAGE = 230
 IMAX = 100
 IB = 10
@@ -104,86 +105,6 @@ cross.put_next <- function(state, time, value) {
         return(list(last_value = value, last_time = time,
                     cross_time = state$cross_time))
     }
-}
-
-# @time time, u and i form a time series of AC signals
-# @u
-# @i
-# @freq.f0 fundamental frequency
-# @threshold only output points when it deviates from the previous one for
-#   the givin threshold value.
-# @return a list of (time, theta). The elements of vector PhaseShift are in
-#   range of [0, 2pi), which defined as the radian difference between U and I
-#   using I - U.
-#
-phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
-    period <- 1/freq.f0
-    ts <- c()
-    phase <- c()    # between (-pi, pi]
-
-    state.u <- NULL
-    state.i <- NULL
-
-    for (idx in 1:length(time)) {
-        t <- time[idx]
-        state.u <- cross.put_next(state.u, t, u[idx])
-        state.i <- cross.put_next(state.i, t, i[idx])
-
-        # idx is not crossing
-        if (is.null(state.i$cross_time) || state.i$cross_time != t)
-            next
-
-        # when idx is crossing but u has not yet crossed
-        if (is.null(state.u$cross_time))
-            next
-
-        # now idx is crossing and u is also crossing or crossed
-        # at some time ago, we're able to do phase comparing
-        diff <- t - state.u$cross_time
-
-        # need wait for a new crossing on U
-        state.u$cross_time <- NULL
-
-        # time diff should witin a period, we may lost some
-        # samples
-        if (diff >= period)
-            next
-
-        # convert the ange into range of (-p2, pi]
-        #
-        rad <- (diff/period)*2*pi
-        if (rad > pi) rad <- rad - 2*pi
-
-        ts <- append(ts, t)
-        phase <- append(phase, rad)
-    }
-    li <- list(time=ts, theta=phase)
-    if (threshold == 0)
-        return(li)
-
-    t <- c()
-    p <- c() 
-    last.rad <- 0
-    len <- length(li$theta)
-
-    for (idx in 1:len) {
-        rad <- li$theta[idx]
-
-        # calculate the difference within the boundary of (-pi, pi]
-        #
-        diff <- (rad - last.rad) %% (2*pi)
-        if (diff >= pi) diff <- -(2*pi - diff)
-
-        if (len >= MAX_PLOT_WIDTH && idx %% floor(len/MAX_PLOT_WIDTH) == 0
-            || idx == 1 
-            || idx == len
-            || abs(diff) > threshold) {
-            last.rad <- rad
-            t <- append(t, li$time[idx])
-            p <- append(p, rad)
-        }
-    }
-    list(time=t, theta=p)
 }
 
 # @k_start start value of the times of interquartile range
@@ -377,6 +298,86 @@ plot.ui_hist <- function(data, range=c(-Inf, Inf), phase) {
     )
 }
 
+# @time time, u and i form a time series of AC signals
+# @u
+# @i
+# @freq.f0 fundamental frequency
+# @threshold only output points when it deviates from the previous one for
+#   the givin threshold value.
+# @return a list of (time, theta). The elements of vector PhaseShift are in
+#   range of [0, 2pi), which defined as the radian difference between U and I
+#   using I - U.
+#
+phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
+    period <- 1/freq.f0
+    ts <- c()
+    phase <- c()    # between (-pi, pi]
+
+    state.u <- NULL
+    state.i <- NULL
+
+    for (idx in 1:length(time)) {
+        t <- time[idx]
+        state.u <- cross.put_next(state.u, t, u[idx])
+        state.i <- cross.put_next(state.i, t, i[idx])
+
+        # idx is not crossing
+        if (is.null(state.i$cross_time) || state.i$cross_time != t)
+            next
+
+        # when idx is crossing but u has not yet crossed
+        if (is.null(state.u$cross_time))
+            next
+
+        # now idx is crossing and u is also crossing or crossed
+        # at some time ago, we're able to do phase comparing
+        diff <- t - state.u$cross_time
+
+        # need wait for a new crossing on U
+        state.u$cross_time <- NULL
+
+        # time diff should witin a period, we may lost some
+        # samples
+        if (diff >= period)
+            next
+
+        # convert the ange into range of (-p2, pi]
+        #
+        rad <- (diff/period)*2*pi
+        if (rad > pi) rad <- rad - 2*pi
+
+        ts <- append(ts, t)
+        phase <- append(phase, rad)
+    }
+    li <- list(time=ts, theta=phase)
+    if (threshold == 0)
+        return(li)
+
+    t <- c()
+    p <- c() 
+    last.rad <- 0
+    len <- length(li$theta)
+
+    for (idx in 1:len) {
+        rad <- li$theta[idx]
+
+        # calculate the difference within the boundary of (-pi, pi]
+        #
+        diff <- (rad - last.rad) %% (2*pi)
+        if (diff >= pi) diff <- -(2*pi - diff)
+
+        if (len >= MAX_PLOT_WIDTH && idx %% floor(len/MAX_PLOT_WIDTH) == 0
+            || idx == 1 
+            || idx == len
+            || abs(diff) > threshold) {
+            last.rad <- rad
+            t <- append(t, li$time[idx])
+            p <- append(p, rad)
+        }
+    }
+    list(time=t, theta=p)
+}
+
 # Plot U/I RMS as well as phase angle trajetories with reduced samples, limited
 # by a change rage threshold
 # @threshold sample reducing threshold of U, I and Phase shift 
@@ -421,6 +422,7 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
          i=c(min(do.call(cbind, li.mm$i)[1,]), max(do.call(cbind, li.mm$i)[2,])))
 
     colors <- c('orange', 'blue')
+    ticks <- list(u=seq(0, 330,50), i=seq(0, 150, 20))
     sapply(1:length(qq), function(m) {
         sapply(phase, function(n) {
                v <- li.rms[[m]][[paste('l', n, sep='')]]
@@ -429,8 +431,11 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                     xlab='Time (s)',
                     ylab=paste(q[m], n, sep=''),
                     ylim=c(0, minmax[[m]][2] * 1.05),
+                    yaxt='none',
                     col=colors[m], type=type,
-                    panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
+                    panel.first=c(abline(
+                            v=marker, lty=3, col=color.oe_marker)))
+               axis(2, las=2)
         })
     })
 
@@ -441,17 +446,17 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                              u=u, i=i, threshold=threshold[3])
            pos1 <- seq(-pi, pi, by=pi/6)
            pos <- seq(-pi, pi, by=pi/2)
-           tickmark <- expression(-pi, '', 0, '', pi)
+           tickmark <- expression(-~~pi, '', 0, '', pi)
            plot(li$time, li$theta,
                 main=paste('Phase - L', n, sep=''),
                 xlab='Time (s)',
-                ylab=expression(theta[u-i]),
+                ylab=expression(theta),
                 ylim=c(-pi * 1.05, pi * 1.05),
                 yaxt='none',
                 col='seagreen', type=type,
                 panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
-           axis(2, at=pos1, label=F, tck=-.015)
-           axis(2, at=pos, label=tickmark, tck=-.03)
+           axis(2, at=pos1, label=F, tck=-.03)
+           axis(2, at=pos, label=tickmark, las=2)
            abline(h=pos, lwd=0.2)
     })
 }
@@ -592,10 +597,10 @@ plot.ui_oe <- function(ol, ex, time_scale=NULL, phase) {
 }
 
 save_plot <- function(plot, name, dir='.',
-                      width=480, height=480, png=F, svg=T) {
+                      width=480, height=640, png=F, svg=T) {
     if (svg) {
         svglite(paste(dir, '/', name, '.svg', sep=''),
-            width=width/96, height=height/96)
+            width=width/SYS_DPI, height=height/SYS_DPI)
         plot()
         dev.off()
     }

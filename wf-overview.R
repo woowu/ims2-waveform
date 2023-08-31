@@ -122,12 +122,14 @@ sapply(phase, function(n) {
               name=paste(namebase, '-timeline-l', n, sep=''))
 })
 
-print(paste('plot oe details'))
-
 # for each time group, we plot a detail u/i waveform around the
 # median time of the group.
 #
-lapply(grp, function(g) {
+lapply(1:length(grp), function(idx) {
+    g <- grp[[idx]]
+    print(paste('plot oe detail ',
+                idx, '/', length(grp),
+                ': ', g, sep=''))
     margin <- 1.5 * PERIOD
     larger_margin <- 15
     marker.u=c()
