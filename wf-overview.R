@@ -1,5 +1,6 @@
 #!/usr/bin/Rscript --vanilla
 library(optparse)
+library(stringr)
 
 VOLTAGE = 230
 IMAX = 100
@@ -34,12 +35,6 @@ if (is.null(opt$phase)) {
 write.csv(data.frame(Time=detect_lost(data$Time)),
           paste(namebase, '-lost.csv', sep=''), row.names=F)
 
-print(paste('plot histograms'))
-sapply(phase, function(n) {
-    save_plot(function() plot.ui_hist(data, phase=n:n),
-              name=paste(namebase, '-hist-l', n, sep=''))
-})
-
 print(paste('calculate oe'))
 oe <- ui_oe.calc(data, phase=phase)
 sapply(names(oe), function(ol_or_ex) {
@@ -58,15 +53,6 @@ sapply(names(oe), function(ol_or_ex) {
             }
         })
     })
-})
-
-print(paste('plot oe'))
-sapply(phase, function(n) {
-    save_plot(function() {
-                  plot.ui_oe(oe$ol, oe$ex,
-                             phase=n:n,
-                             time_scale=c(min(data$Time), max(data$Time)))
-    }, name=paste(namebase, '-oe-l', n, sep=''))
 })
 
 t <- lapply(names(oe), function(ol_or_ex) {
@@ -94,13 +80,30 @@ if (length(all_i) == 0) all_i <- c()
 oe_time <- list(u=all_u, i=all_i)
 event_time <- sort(unique(c(all_u, all_i)))
 
+#------------------------------------------------------------------------------
+
 print(paste('plot timeline'))
 sapply(phase, function(n) {
     save_plot(function() plot.rms_and_phase(data, phase=n:n,
                                             threshold=c(.05, .1, .1745),
                                             marker=event_time),
               width=640, height=640, 
-              name=paste(namebase, '-timeline-l', n, sep=''))
+              name=paste('01-timeline_', namebase, '_l', n, sep=''))
+})
+
+print(paste('plot oe'))
+sapply(phase, function(n) {
+    save_plot(function() {
+                  plot.ui_oe(oe$ol, oe$ex,
+                             phase=n:n,
+                             time_scale=c(min(data$Time), max(data$Time)))
+    }, name=paste('02-oe_', namebase, '_l', n, sep=''))
+})
+
+print(paste('plot histograms'))
+sapply(phase, function(n) {
+    save_plot(function() plot.ui_hist(data, phase=n:n),
+              name=paste('03-hist_', namebase, '_l', n, sep=''))
 })
 
 # event_time could be a large set, but times in the set many crowed together
@@ -123,7 +126,7 @@ split_time_to_ui <- function(time, u, i) {
 # for each time group, we plot a detail u/i waveform around the
 # median time of the group.
 #
-grp_view <- list(small=small_grp, large=large_grp)
+grp_view <- list(s1=small_grp, s2=large_grp)
 margin <- c(1.5 * PERIOD, 7.5)
 png_flag <- c(F, T)
 svg_flag <- c(T, F)
@@ -151,9 +154,10 @@ lapply(1:length(grp_view), function(idx) {
                                marker.u=markers$u,
                                marker.i=markers$i)
             },
-            name=paste(namebase, '-oe-inst-l', n,
-                       '-', name, '-', time_id, sep=''),
-                      png=png, svg=svg)
+            name=paste('oe-inst_', namebase, '_',
+                       name, '-', str_pad(idx, 3, pad='0'),
+                       '-', time_id, '-l', n, sep=''),
+                       png=png, svg=svg)
         })
     })
 })
