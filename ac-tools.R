@@ -195,6 +195,28 @@ cut_time <- function(d, t, ncycles=10, align=.5) {
     subset(d, Time >= intvl[1] & Time <= intvl[2])
 }
 
+# Grouping a vector of time by put neiboring times into
+# a same group
+# @param time
+# @param window window length
+# @return a list of (start, end) vectors
+#
+group_time <- function(time, window) {
+    grp <- list()
+    der <- c(0, diff(event_time))
+    acc_dist <- 0
+    j <- 0
+    for (i in 1:length(der)) {
+        acc_dist <- acc_dist + der[i]
+        if (acc_dist >= window) {
+            grp <- append(grp, list(event_time[j:(i-1)]))
+            acc_dist <- 0
+            j <- i
+        }
+    }
+    grp <- append(grp, list(event_time[j:length(event_time)]))
+}
+
 u_i_range_of_all_phases <- function(data) {
     li <- lapply(c('U', 'I'), function(q) {
                lapply(1:3, function(n) {

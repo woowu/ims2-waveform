@@ -94,26 +94,6 @@ if (length(all_i) == 0) all_i <- c()
 oe_time <- list(u=all_u, i=all_i)
 event_time <- sort(unique(c(all_u, all_i)))
 
-# event_time could be a large set, but times in the set many crowed together
-# very closly. For what many times spanning no more than the width of our
-# observation window, we plot the data in a single plot. For this purpose,
-# we need to split the whole event_time set into groups.
-#
-grp <- list()
-window <- PERIOD
-der <- c(0, diff(event_time))
-acc_dist <- 0
-j <- 0
-for (i in 1:length(der)) {
-    acc_dist <- acc_dist + der[i]
-    if (acc_dist >= window) {
-        grp <- append(grp, list(event_time[j:(i-1)]))
-        acc_dist <- 0
-        j <- i
-    }
-}
-grp <- append(grp, list(event_time[j:length(event_time)]))
-
 print(paste('plot timeline'))
 sapply(phase, function(n) {
     save_plot(function() plot.rms_and_phase(data, phase=n:n,
@@ -123,44 +103,57 @@ sapply(phase, function(n) {
               name=paste(namebase, '-timeline-l', n, sep=''))
 })
 
+# event_time could be a large set, but times in the set many crowed together
+# very closly. For what many times spanning no more than the width of our
+# observation window, we plot the data in a single plot. For this purpose,
+# we need to split the whole event_time set into groups.
+#
+
+small_grp <- group_time(time, PERIOD)
+large_grp <- group_time(time, 10)
+
+split_time_to_ui <- function(time, u, i) {
+    time.u <- time[time %in% u]
+    if (length(time.u) == 0) time.u <- c()
+    time.i <- time[time %in% i]
+    if (length(time.i) == 0) time.i <- c()
+    list(u=time.u, i=time.i)
+}
+
 # for each time group, we plot a detail u/i waveform around the
 # median time of the group.
 #
-lapply(1:length(grp), function(idx) {
-    g <- grp[[idx]]
-    print(paste('plot oe detail ',
-                idx, '/', length(grp),
-                ': ', g, sep=''))
-    margin <- 1.5 * PERIOD
-    larger_margin <- 15
-    marker.u=c()
-    marker.i=c()
-    for (t in g) {
-        if (t %in% oe_time$u)
-            marker.u <- append(marker.u, t)
-        if (t %in% oe_time$i)
-            marker.i <- append(marker.i, t)
-    }
-    g <- sort(g)
-    window <- c(min(g) - margin, max(g) + margin)
-    grp_name <- paste(sprintf('%.4f', g[1]), '-',
-                      sprintf('%.4f', g[length(g)]),
-                      sep='')
-    sapply(phase, function(n) {
-        save_plot(function() {
-                      plot.ui_inst(data, window, phase=n:n,
-                                   marker.u=marker.u,
-                                   marker.i=marker.i)
-                          },
-                      name=paste(namebase, '-oe-inst-', grp_name, '-l', n, sep=''))
+grp_view <- list(small=small_grp, large=large_grp)
+margin <- c(1.5 * PERIOD, 7.5)
+png_flag <- c(F, T)
+svg_flag <- c(T, F)
+lapply(1:length(grp_view), function(idx) {
+    view <- grp_view[[idx]]
+    margin <- margin[[idx]]
+    png <- png_flag[idx]
+    svg <- svg_flag[idx]
+    name <- names(grp_view)[idx]
 
-        window <- c(min(g) - larger_margin, max(g) + larger_margin)
-        save_plot(function() {
-                      plot.ui_inst(data, window, phase=n:n,
-                                   marker.u=marker.u,
-                                   marker.i=marker.i)
-                      },
-                      name=paste(namebase, '-oe-inst-', grp_name, '-long-l', n, sep=''),
-                      png='T', svg='F')
+    lapply(1:length(view), function(idx) {
+        g <- view[[idx]]
+        print(paste('plot oe detail (',
+                    name, ') ',
+                    idx, '/', length(view),
+                    ': ', g, sep=''))
+        markers <- split_time_to_ui(g, oe_time$u, oe_time$i)
+        time_id <- paste(sprintf('%.4f', g[1]), '-',
+                          sprintf('%.4f', g[length(g)]),
+                          sep='')
+        sapply(phase, function(n) {
+            save_plot(function() {
+                  plot.ui_inst(data,
+                               c(min(g) - margin, max(g) + margin), phase=n:n,
+                               marker.u=markers$u,
+                               marker.i=markers$i)
+            },
+            name=paste(namebase, '-oe-inst-l', n,
+                       '-', name, '-', time_id, sep=''),
+                      png=png, svg=svg)
+        })
     })
 })
