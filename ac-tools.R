@@ -23,7 +23,11 @@ color.oe_marker <- rgb(0, 0, 0, alpha=.35)
 detect_lost <- function(time) {
     dd <- c(0, 0, diff(diff(time)))
     u <- time[which(dd > 1e-6)]
-    if (length(u) == 0) return(NULL)
+    if (length(u) == 0) {
+        return(NULL)
+    } else {
+        return(u)
+    }
 }
 
 # If I don't have a full period to work with, just
@@ -268,7 +272,6 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
     data <- subset(data, Time <= range[2])
 
     q <- c('U', 'I')
-    min_scale <- c(VOLTAGE/10, IB/10)
     scales <- c(USCALE, ISCALE)
     if (nrow(data) > 2 * RATE) {
         colors <- c(color.u.alpha, color.i.alpha)
@@ -279,18 +282,24 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
 
     sapply(1:length(q), function(m) {
         sapply(phase, function(n) {
-                val_min <- min(data[, paste(q[m], n, sep='')] * scales[m])
-                val_max <- max(data[, paste(q[m], n, sep='')] * scales[m])
-                miny <- min(-min_scale[m] * sqrt(2), val_min)
-                maxy <- max(min_scale[m] * sqrt(2), val_max)
+                x_range <- c(min(data$Time), max(data$Time))
+                y_range <- c(min(data[, paste(q[m], n, sep='')] * scales[m]),
+                             max(data[, paste(q[m], n, sep='')] * scales[m]))
+                if (! is.infinite(range[1]))
+                    x_range[1] <- range[1]
+                if (! is.infinite(range[2]))
+                    x_range[2] <- range[2]
                 plot(data$Time,
                      data[, paste(q[m], n, sep='')] * scales[m],
                      main=paste(q[m], ' inst - L', n, sep=''),
                      xlab='Time (s)',
                      ylab=paste(q[m], n, sep=''),
-                     ylim=c(miny, maxy),
+                     xlim=x_range,
+                     ylim=c(y_range[1] - abs(y_range[1]) * .05,
+                            y_range[2] + abs(y_range[2]) * .05),
                      col=colors[m], type=type,
-                     panel.first=c(abline(h=c(0, val_min, val_max), lty=3)))
+                     panel.first=c(abline(h=c(0, y_range[1], y_range[2]),
+                                          lty=3)))
                 axis(1, at=marker[[m]], label=F, tck=-.04, col.ticks='deeppink')
         })
     })
@@ -403,7 +412,8 @@ phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
 #
 plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                                threshold=c(0, 0, 0),
-                               marker=c(),
+                               marker.oe=c(),
+                               marker.lost=c(),
                                type='l') {
     par(bg='cornsilk', mfrow=c(3, length(phase)))
 
@@ -451,9 +461,10 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                      ylab=paste(q[m], n, sep=''),
                      ylim=c(0, minmax[[m]][2] * 1.05),
                      yaxt='none',
-                     col=colors[m], type=type)
+                     col=colors[m], type=type,
+                     panel.first=c(abline(v=marker.lost, lty=3)))
                 axis(2, las=2)
-                axis(1, at=marker, label=F, tck=-.04, col.ticks='deeppink')
+                axis(1, at=marker.oe, label=F, tck=-.04, col.ticks='deeppink')
         })
     })
 
@@ -473,10 +484,11 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                  ylab=expression(theta),
                  ylim=c(-pi * 1.05, pi * 1.05),
                  yaxt='none',
-                 col='seagreen', type=type)
+                 col='seagreen', type=type,
+                 panel.first=c(abline(v=marker.lost, lty=3)))
             axis(2, at=pos1, label=F, tck=-.03)
             axis(2, at=pos, label=tickmark, las=2)
-            axis(1, at=marker, label=F, tck=-.04, col.ticks='deeppink')
+            axis(1, at=marker.oe, label=F, tck=-.04, col.ticks='deeppink')
             abline(h=pos, lwd=0.2)
     })
 }
@@ -485,7 +497,7 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
 # then return ol and oe list.
 # @return a 4-layer list of <ol|ex>/<U|I>/L<n>/<time|value>
 #
-ui_oe.calc <- function (data, range=c(-Inf, Inf), phase) {
+ui_oe.calc <- function (data, range=c(-Inf, Inf), phase, lost_time) {
     data <- subset(data, Time >= range[1])
     data <- subset(data, Time <= range[2])
 
@@ -500,7 +512,7 @@ ui_oe.calc <- function (data, range=c(-Inf, Inf), phase) {
             print(paste('calculate outlier on phase ',
                         n, ' for ', type[m], sep=''))
             li <- outlier(data$Time, value,
-                          skip_time=detect_lost(data$Time))
+                          skip_time=lost_time)
             li$time <- li$time[! is.na(li$time)]
             li$value <- li$value[! is.na(li$value)]
 
