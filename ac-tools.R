@@ -14,7 +14,7 @@ IB = 10
 color.u <- 'darkorange1'
 color.i <- 'blue2'
 color.u.alpha <- rgb(1, .498, 0, alpha=.7)   # darkorange1 + alpha
-color.i.alpha <- rgb(0, 0, .933, alpha=.7)     # blue2 + alpha
+color.i.alpha <- rgb(0, 0, .933, alpha=.7)   # blue2 + alpha
 color.oe_marker <- rgb(0, 0, 0, alpha=.35)
 
 # time in a AC time series should have evenly spaced times.
@@ -22,7 +22,8 @@ color.oe_marker <- rgb(0, 0, 0, alpha=.35)
 #
 detect_lost <- function(time) {
     dd <- c(0, 0, diff(diff(time)))
-    time[which(dd > 1e-6)]
+    u <- time[which(dd > 1e-6)]
+    if (length(u) == 0) return(NULL)
 }
 
 # If I don't have a full period to work with, just
@@ -138,8 +139,8 @@ outlier <- function(time, value, stop=1e-6, k_start=2, kp=0.75, skip_time) {
         ix.hist <- append(ix.hist, length(ix))
         if (length(ix.hist) > 20) {
             ix.hist <- ix.hist[-1]
-            delta <- 1
-            if (abs(sum(diff(ix.hist))) < delta) {
+            if (abs(sum(diff(ix.hist))) < 1 |
+                abs(sum(diff(ix.hist[2:length(ix.hist)]))) < 1) {
                 print('outlier searching stopped for result converged')
                 print(ix.hist)
                 break
@@ -278,27 +279,19 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
 
     sapply(1:length(q), function(m) {
         sapply(phase, function(n) {
-                   val_min <- min(data[, paste(q[m], n, sep='')] * scales[m])
-                   val_max <- max(data[, paste(q[m], n, sep='')] * scales[m])
-                   miny <- min(-min_scale[m] * sqrt(2), val_min)
-                   maxy <- max(min_scale[m] * sqrt(2), val_max)
-                   plot(data$Time,
-                        data[, paste(q[m], n, sep='')] * scales[m],
-                        main=paste(q[m], ' inst - L', n, sep=''),
-                        xlab='Time (s)',
-                        ylab=paste(q[m], n, sep=''),
-                        ylim=c(miny, maxy),
-                        col=colors[m], type=type,
-                        panel.first=c(abline(h=c(0, val_min, val_max), lty=3),
-                                      abline(v=marker[[m]], lty=3)))
-                   #smoothScatter(data$Time,
-                   #              data[, paste(q[m], n, sep='')] * scales[m],
-                   #              main=paste(q, ' inst - L', n, sep=''),
-                   #              xlab='Time (s)',
-                   #              ylab=paste(q[m], n, sep=''),
-                   #              ylim=c(miny, maxy))
-                   #abline(h=c(0, val_min, val_max), lty=3)
-                   #abline(v=marker[[m]], lty=3)
+                val_min <- min(data[, paste(q[m], n, sep='')] * scales[m])
+                val_max <- max(data[, paste(q[m], n, sep='')] * scales[m])
+                miny <- min(-min_scale[m] * sqrt(2), val_min)
+                maxy <- max(min_scale[m] * sqrt(2), val_max)
+                plot(data$Time,
+                     data[, paste(q[m], n, sep='')] * scales[m],
+                     main=paste(q[m], ' inst - L', n, sep=''),
+                     xlab='Time (s)',
+                     ylab=paste(q[m], n, sep=''),
+                     ylim=c(miny, maxy),
+                     col=colors[m], type=type,
+                     panel.first=c(abline(h=c(0, val_min, val_max), lty=3)))
+                axis(1, at=marker[[m]], label=F, tck=-.04, col.ticks='deeppink')
         })
     })
 }
@@ -337,7 +330,7 @@ plot.ui_hist <- function(data, range=c(-Inf, Inf), phase) {
 phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
     period <- 1/freq.f0
     ts <- c()
-    phase <- c()    # between (-pi, pi]
+    theta <- c()    # between (-pi, pi]
 
     state.u <- NULL
     state.i <- NULL
@@ -367,16 +360,16 @@ phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
         if (diff >= period)
             next
 
-        # convert the ange into range of (-p2, pi]
+        # convert the angle into range of (-p2, pi]
         #
         rad <- (diff/period)*2*pi
         if (rad > pi) rad <- rad - 2*pi
 
         ts <- append(ts, t)
-        phase <- append(phase, rad)
+        theta <- append(theta, rad)
     }
-    li <- list(time=ts, theta=phase)
-    if (threshold == 0)
+    li <- list(time=ts, theta=theta)
+    if (threshold == 0 || is.null(ts))
         return(li)
 
     t <- c()
@@ -451,17 +444,16 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
     ticks <- list(u=seq(0, 330,50), i=seq(0, 150, 20))
     sapply(1:length(qq), function(m) {
         sapply(phase, function(n) {
-               v <- li.rms[[m]][[paste('l', n, sep='')]]
-               plot(v$time, v$rms,
-                    main=paste(q[m], ' RMS - L', n, sep=''),
-                    xlab='Time (s)',
-                    ylab=paste(q[m], n, sep=''),
-                    ylim=c(0, minmax[[m]][2] * 1.05),
-                    yaxt='none',
-                    col=colors[m], type=type,
-                    panel.first=c(abline(
-                            v=marker, lty=3, col=color.oe_marker)))
-               axis(2, las=2)
+                v <- li.rms[[m]][[paste('l', n, sep='')]]
+                plot(v$time, v$rms,
+                     main=paste(q[m], ' RMS - L', n, sep=''),
+                     xlab='Time (s)',
+                     ylab=paste(q[m], n, sep=''),
+                     ylim=c(0, minmax[[m]][2] * 1.05),
+                     yaxt='none',
+                     col=colors[m], type=type)
+                axis(2, las=2)
+                axis(1, at=marker, label=F, tck=-.04, col.ticks='deeppink')
         })
     })
 
@@ -470,6 +462,8 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
            i <- data[, paste('I', n, 'Scaled', sep='')]
            li <- phase_shift(time=data$Time,
                              u=u, i=i, threshold=threshold[3])
+           if (is.null(li$time)) return(NULL)
+
            pos1 <- seq(-pi, pi, by=pi/6)
            pos <- seq(-pi, pi, by=pi/2)
            tickmark <- expression(-~~pi, '', 0, '', pi)
@@ -545,7 +539,7 @@ ui_oe.calc <- function (data, range=c(-Inf, Inf), phase) {
 # @ol outliers, a 3-layer list of <U|I>/L<n>/<time|value>
 # @ex extremers, a 3-layer list of <U|I>/L<n>/<time|value>
 #
-plot.ui_oe <- function(ol, ex, time_scale=NULL, phase) {
+plot.ui_oe <- function(ol, ex, phase, time_scale=NULL) {
     # the min/max U/I need firstly looked up from the data
     # then adjusted with some reasonable default scale.
     #

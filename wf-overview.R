@@ -25,6 +25,7 @@ source('~/R/local-script/ac-tools.R')
 namebase <- sub('\\.[[:alnum:]]+$', '', basename(opt$filename))
 print(paste('load', opt$filename))
 data <- read_wf(opt$filename)
+print(paste(nrow(data), 'samples'))
 
 if (is.null(opt$phase)) {
     phase <- 1:3
@@ -32,8 +33,10 @@ if (is.null(opt$phase)) {
     phase <- opt$phase:opt$phase
 }
 
-write.csv(data.frame(Time=detect_lost(data$Time)),
-          paste(namebase, '-lost.csv', sep=''), row.names=F)
+time_of_lost <- detect_lost(data$Time)
+if (! is.null(time_of_lost))
+    write.csv(data.frame(Time=),
+              paste(namebase, '-lost.csv', sep=''), row.names=F)
 
 print(paste('calculate oe'))
 oe <- ui_oe.calc(data, phase=phase)
@@ -127,7 +130,7 @@ split_time_to_ui <- function(time, u, i) {
 # median time of the group.
 #
 grp_view <- list(s1=small_grp, s2=large_grp)
-margin <- c(1.5 * PERIOD, 7.5)
+margin <- c(.5 * PERIOD, 7.5)
 png_flag <- c(F, T)
 svg_flag <- c(T, F)
 lapply(1:length(grp_view), function(idx) {
@@ -139,6 +142,7 @@ lapply(1:length(grp_view), function(idx) {
 
     lapply(1:length(view), function(idx) {
         g <- view[[idx]]
+        if (is.null(g)) return(NULL)
         print(paste('plot oe detail (',
                     name, ') ',
                     idx, '/', length(view),
@@ -149,10 +153,15 @@ lapply(1:length(grp_view), function(idx) {
                           sep='')
         sapply(phase, function(n) {
             save_plot(function() {
-                  plot.ui_inst(data,
-                               c(min(g) - margin, max(g) + margin), phase=n:n,
-                               marker.u=markers$u,
-                               marker.i=markers$i)
+                range <- c(min(g) - margin, max(g) + margin)
+                if (range[2] - range[1] < 1.5 * PERIOD) {
+                    e <- (1.5 * PERIOD - (max(g) - min(g))) / 2
+                    range <- c(min(g) - e, max(g) + e)
+                }
+                plot.ui_inst(data,
+                             c(min(g) - margin, max(g) + margin), phase=n:n,
+                             marker.u=markers$u,
+                             marker.i=markers$i)
             },
             name=paste('oe-inst_', namebase, '_',
                        name, '-', str_pad(idx, 3, pad='0'),
