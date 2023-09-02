@@ -458,26 +458,26 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
     })
 
     sapply(phase, function(n) {
-           u <- data[, paste('U', n, 'Scaled', sep='')]
-           i <- data[, paste('I', n, 'Scaled', sep='')]
-           li <- phase_shift(time=data$Time,
-                             u=u, i=i, threshold=threshold[3])
-           if (is.null(li$time)) return(NULL)
+            u <- data[, paste('U', n, 'Scaled', sep='')]
+            i <- data[, paste('I', n, 'Scaled', sep='')]
+            li <- phase_shift(time=data$Time,
+                              u=u, i=i, threshold=threshold[3])
+            if (is.null(li$time)) return(NULL)
 
-           pos1 <- seq(-pi, pi, by=pi/6)
-           pos <- seq(-pi, pi, by=pi/2)
-           tickmark <- expression(-~~pi, '', 0, '', pi)
-           plot(li$time, li$theta,
-                main=paste('Phase - L', n, sep=''),
-                xlab='Time (s)',
-                ylab=expression(theta),
-                ylim=c(-pi * 1.05, pi * 1.05),
-                yaxt='none',
-                col='seagreen', type=type,
-                panel.first=c(abline(v=marker, lty=3, col=color.oe_marker)))
-           axis(2, at=pos1, label=F, tck=-.03)
-           axis(2, at=pos, label=tickmark, las=2)
-           abline(h=pos, lwd=0.2)
+            pos1 <- seq(-pi, pi, by=pi/6)
+            pos <- seq(-pi, pi, by=pi/2)
+            tickmark <- expression(-~~pi, '', 0, '', pi)
+            plot(li$time, li$theta,
+                 main=paste('Phase - L', n, sep=''),
+                 xlab='Time (s)',
+                 ylab=expression(theta),
+                 ylim=c(-pi * 1.05, pi * 1.05),
+                 yaxt='none',
+                 col='seagreen', type=type)
+            axis(2, at=pos1, label=F, tck=-.03)
+            axis(2, at=pos, label=tickmark, las=2)
+            axis(1, at=marker, label=F, tck=-.04, col.ticks='deeppink')
+            abline(h=pos, lwd=0.2)
     })
 }
 
