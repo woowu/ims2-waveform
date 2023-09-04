@@ -89,7 +89,7 @@ plot_timeline <- function(data, event_time, lost_time) {
     print(paste('plot timeline'))
     sapply(phase, function(n) {
         save_plot(function() plot.rms_and_phase(data, phase=n:n,
-                                                threshold=c(.05, .1, .1745),
+                                                threshold=c(.05, .1, pi*.01),
                                                 marker.oe=event_time,
                                                 marker.lost=lost_time),
                   width=640, height=640, 

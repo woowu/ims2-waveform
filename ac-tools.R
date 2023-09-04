@@ -1,15 +1,18 @@
 library(tidyverse)
+library(dplR)
 library(svglite)
 
 USCALE <- 2.1522e-2
 ISCALE <- 4.61806e-3
-RATE <- 6.4e3
-SAMPLES_PER_PERIOD <- 128
+SR <- 6.4e3
+F0 <- 50
+SAMPLES_PER_PERIOD <- SR/F0
 MAX_PLOT_WIDTH <- 400
 SYS_DPI <- 96
 VOLTAGE = 230
 IMAX = 100
 IB = 10
+EPSILON = 1e-8
 
 color.u <- 'darkorange1'
 color.i <- 'blue2'
@@ -17,17 +20,38 @@ color.u.alpha <- rgb(1, .498, 0, alpha=.7)   # darkorange1 + alpha
 color.i.alpha <- rgb(0, 0, .933, alpha=.7)   # blue2 + alpha
 color.oe_marker <- rgb(0, 0, 0, alpha=.35)
 
-# time in a AC time series should have evenly spaced times.
-# if there is a jump, it means one or more samples lost.
+# Time in a AC time series should be evenly spaced. If there is a jump, it
+# means one or more samples lost.
+# @return a list of time before which there are one or more lost samples
 #
 detect_lost <- function(time) {
-    dd <- c(0, 0, diff(diff(time)))
-    u <- time[which(dd > 1e-6)]
+    dt <- c(1/SR, diff(time))
+    u <- time[which(abs(dt - (1/SR)) > EPSILON)]
     if (length(u) == 0) {
         return(NULL)
     } else {
         return(u)
     }
+}
+
+# For a given series s and a set of splits (j, k, n), it returns (1, ..., j_p),
+# (j, ..., k_p), (k, ..., n_p), (n, ...), where [jkn]_p means the previous data
+# point before [jkn]
+#
+split_series <- function(s, splits) {
+    idx <- which(s == splits)
+    li <- list()
+    j <- 1
+    seq <- 1
+    for (i in idx) {
+        if (i > j) {
+            li[[seq]] <- s[j:(i - 1)]
+            seq <- seq + 1
+        }
+        j <- i
+    }
+    li[[seq]] <- s[j:length(s)]
+    return(li)
 }
 
 # If I don't have a full period to work with, just
@@ -57,7 +81,6 @@ rms.map <- function(time, value) {
     # RMS values at the first SAMPLES_PER_PERIOD - 1 samples are NA's
     #
     d$Rms[1:(SAMPLES_PER_PERIOD - 1)] <- 0
-    #d <- d[SAMPLES_PER_PERIOD:nrow(d),]
     list(time = d$Time, rms = d$Rms)
 }
 
@@ -95,20 +118,42 @@ rms.reduce <- function(time, rms, threshold=0) {
 
 #
 # @state the state variable for the crossing detection
-# @time time of the new point
-# @value value of the new point
+# @param time time of the new point
+# @param value value of the new point
+# @param dir 1: positive crossing, -1: negative crossing, 0: both
+# @param threshold only when the absolute of new value greater than the
+#   threshold, the cross condition is hold
 # @return updated state variable
 #
-cross.put_next <- function(state, time, value) {
-    if (value == 0)
-        return(state)
-    if (is.null(state)) {
-        return(list(last_value = value, last_time = time, cross_time = NULL))
-    } else if (state$last_value < 0 & value > 0) {
-        return(list(last_value = value, last_time = time, cross_time = time))
+cross.put_next <- function(state, time, value, dir=1, threshold=0) {
+    s <- state
+    if (is.null(s)) {
+        return(list(last.val=value,
+                    time.before_cross=time,
+                    time.after_cross=NULL,
+                    cross_time=NULL))
+    } else if (s$last.val * value > 0 |
+               dir == 1 & value < 0 |
+               dir == -1 & value > 0) {
+        # not crossing or not interesting crossing
+        #
+        s$last.val <- value
+        s$time.before_cross <- time
+        return(s)
+    } else if (abs(value) <= threshold) {
+        # crossed but the value not reached the threshold
+        #
+        s$time.after_cross <- time
+        return(s)
     } else {
-        return(list(last_value = value, last_time = time,
-                    cross_time = state$cross_time))
+        # interested crossing confirmed
+        #
+        if (is.null(s$time.after_cross)) s$time.after_cross <- time
+        s$cross_time <- .5 * (s$time.before_cross + s$time.after_cross)
+        s$time.before_cross <- time
+        s$time.after_cross <- NULL
+        s$last.val <- value
+        return(s)
     }
 }
 
@@ -195,8 +240,8 @@ extremer <- function(time, value, threshold) {
 }
 
 cut_time <- function(d, t, ncycles=10, align=.5) {
-    intvl <- c(t, t + ncycles * SAMPLES_PER_PERIOD * 1/RATE)
-    intvl <- intvl - align * ncycles * SAMPLES_PER_PERIOD * 1/RATE
+    intvl <- c(t, t + ncycles * SAMPLES_PER_PERIOD * 1/SR)
+    intvl <- intvl - align * ncycles * SAMPLES_PER_PERIOD * 1/SR
     subset(d, Time >= intvl[1] & Time <= intvl[2])
 }
 
@@ -245,7 +290,7 @@ ui_value_scale_to_plot_scale <- function(min_max) {
 read_wf <- function(filename) {
     d <- read.csv(filename)
     if ('Seqno' %in% names(d)) {
-        d$Time <- d$Seqno * 1/RATE
+        d$Time <- d$Seqno * 1/SR
     }
     if (! ('U1Scaled' %in% names(d)))
         d %>%
@@ -273,7 +318,7 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
 
     q <- c('U', 'I')
     scales <- c(USCALE, ISCALE)
-    if (nrow(data) > 2 * RATE) {
+    if (nrow(data) > 2 * SR) {
         colors <- c(color.u.alpha, color.i.alpha)
     } else {
         colors <- c(color.u, color.i)
@@ -293,14 +338,15 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
                      data[, paste(q[m], n, sep='')] * scales[m],
                      main=paste(q[m], ' inst - L', n, sep=''),
                      xlab='Time (s)',
-                     ylab=paste(q[m], n, sep=''),
+                     ylab='',
                      xlim=x_range,
                      ylim=c(y_range[1] - abs(y_range[1]) * .05,
                             y_range[2] + abs(y_range[2]) * .05),
                      col=colors[m], type=type,
                      panel.first=c(abline(h=c(0, y_range[1], y_range[2]),
                                           lty=3)))
-                axis(1, at=marker[[m]], label=F, tck=-.04, col.ticks='deeppink')
+                if (! is.null(marker[[m]]))
+                    axis(1, at=marker[[m]], label=F, tck=-.04, col.ticks='deeppink')
         })
     })
 }
@@ -330,81 +376,113 @@ plot.ui_hist <- function(data, range=c(-Inf, Inf), phase) {
 # @u
 # @i
 # @freq.f0 fundamental frequency
-# @threshold only output points when it deviates from the previous one for
+# @downsample_threshold only output points when it deviates from the previous one for
 #   the givin threshold value.
-# @return a list of (time, theta). The elements of vector PhaseShift are in
-#   range of [0, 2pi), which defined as the radian difference between U and I
-#   using I - U.
+# @return a list of (time, phi). The elements of vector PhaseShift are in
+#   range of [-pi, pi), which defined as the radian difference between U and I
+#   using phi_u - phi_i.
 #
-phase_shift <- function(time, u, i, freq.f0=50, threshold=0) {
+phase_shift <- function(time, u, i, freq.f0=50,
+                        u.threshold=0, i.threshold=0,
+                        downsample_threshold=0) {
     period <- 1/freq.f0
     ts <- c()
-    theta <- c()    # between (-pi, pi]
+    phi <- c()    # between (-pi, pi]
 
     state.u <- NULL
     state.i <- NULL
 
     for (idx in 1:length(time)) {
-        t <- time[idx]
-        state.u <- cross.put_next(state.u, t, u[idx])
-        state.i <- cross.put_next(state.i, t, i[idx])
+        state.u <- cross.put_next(state.u, time[idx], u[idx], dir=1, threshold=u.threshold)
+        state.i <- cross.put_next(state.i, time[idx], i[idx], dir=1, threshold=i.threshold)
 
-        # idx is not crossing
-        if (is.null(state.i$cross_time) || state.i$cross_time != t)
-            next
-
-        # when idx is crossing but u has not yet crossed
-        if (is.null(state.u$cross_time))
-            next
-
-        # now idx is crossing and u is also crossing or crossed
-        # at some time ago, we're able to do phase comparing
-        diff <- t - state.u$cross_time
-
-        # need wait for a new crossing on U
-        state.u$cross_time <- NULL
-
-        # time diff should witin a period, we may lost some
-        # samples
-        if (diff >= period)
-            next
-
-        # convert the angle into range of (-p2, pi]
+        # Only go proceed when i crossed and u had a cross before.
         #
-        rad <- (diff/period)*2*pi
-        if (rad > pi) rad <- rad - 2*pi
+        if (is.null(state.i$cross_time) || is.null(state.u$cross_time) ||
+            state.i$cross_time < state.u$cross_time)
+            next
+
+        # now i and u both have crossed, we're able to do phase comparing
+        # phi_u - phi_i is time of i cross minus time of u cross
+        #
+        p <- ((state.i$cross_time - state.u$cross_time)/period) * 2*pi
+        t <- state.u$cross_time
+
+        #print(paste('idx', idx, 'phase determined:',
+        #            state.i$cross_time,
+        #            state.u$cross_time,
+        #            p))
+
+        state.u$cross_time <- NULL
+        state.i$cross_time <- NULL
+
+        # phi should witin a period, we may lost some
+        # samples
+        if (p >= 2*pi)
+            next
+
+        if (p > pi) p <- p - 2*pi
 
         ts <- append(ts, t)
-        theta <- append(theta, rad)
+        phi <- append(phi, p)
     }
-    li <- list(time=ts, theta=theta)
-    if (threshold == 0 || is.null(ts))
+
+    # smooth the phi
+    #
+    w <- 50 
+    if (length(phi)/10 < w) w <- length(phi)/10
+    phi <- pass.filt(phi, W=w, method='Butterworth')
+
+    li <- list(time=ts, phi=phi)
+    if (downsample_threshold == 0 || is.null(ts))
         return(li)
+
+    # downsample the phi
+    #
 
     t <- c()
     p <- c() 
-    last.rad <- 0
-    len <- length(li$theta)
+    last.phi <- 0
+    len <- length(li$phi)
 
     for (idx in 1:len) {
-        rad <- li$theta[idx]
+        phi <- li$phi[idx]
 
         # calculate the difference within the boundary of (-pi, pi]
         #
-        diff <- (rad - last.rad) %% (2*pi)
+        diff <- (phi - last.phi) %% (2*pi)
         if (diff >= pi) diff <- -(2*pi - diff)
 
-        if (len >= MAX_PLOT_WIDTH && idx %% floor(len/MAX_PLOT_WIDTH) == 0
+        if ((len >= MAX_PLOT_WIDTH && idx %% floor(len/MAX_PLOT_WIDTH)) == 0
             || idx == 1 
             || idx == len
-            || abs(diff) > threshold) {
-            last.rad <- rad
+            || abs(diff) > downsample_threshold) {
+            last.phi <- phi
             t <- append(t, li$time[idx])
-            p <- append(p, rad)
+            p <- append(p, phi)
         }
     }
-    list(time=t, theta=p)
+    list(time=t, phi=p)
 }
+
+# Detect current in/out changes
+# @param time time
+# @param curr current
+#
+#detect_curr_in_out <- function(time, curr) {
+#    r <- rms.map(time=time, value=curr)
+#    #r$rms <- pass.filt(r$rms, W=SAMPLES_PER_PERIOD, method='Butterworth')
+#    der <- c(0, diff(r$rms))
+#    cross <- c()
+#    state <- NULL
+#    for (idx in 1:length(der)) {
+#        t <- r$time[idx]
+#        state <- cross.put_next(state, t, der[idx], dir=0, threshold=.01)
+#        if (! is.null(state$cross_time) && state$cross_time == t)
+#            cross <- append(cross, t)
+#    }
+#    return(cross)
+#}
 
 # Plot U/I RMS as well as phase angle trajetories with reduced samples, limited
 # by a change rage threshold
@@ -458,13 +536,14 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
                 plot(v$time, v$rms,
                      main=paste(q[m], ' RMS - L', n, sep=''),
                      xlab='Time (s)',
-                     ylab=paste(q[m], n, sep=''),
+                     ylab='',
                      ylim=c(0, minmax[[m]][2] * 1.05),
                      yaxt='none',
                      col=colors[m], type=type,
                      panel.first=c(abline(v=marker.lost, lty=3)))
                 axis(2, las=2)
-                axis(1, at=marker.oe, label=F, tck=-.04, col.ticks='deeppink')
+                if (! is.null(marker.oe))
+                    axis(1, at=marker.oe, label=F, tck=-.04, col.ticks='deeppink')
         })
     })
 
@@ -472,23 +551,26 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
             u <- data[, paste('U', n, 'Scaled', sep='')]
             i <- data[, paste('I', n, 'Scaled', sep='')]
             li <- phase_shift(time=data$Time,
-                              u=u, i=i, threshold=threshold[3])
+                              u=u, i=i,
+                              u.threshold=3, i.threshold=.01,
+                              downsample_threshold=threshold[3])
             if (is.null(li$time)) return(NULL)
 
             pos1 <- seq(-pi, pi, by=pi/6)
             pos <- seq(-pi, pi, by=pi/2)
             tickmark <- expression(-~~pi, '', 0, '', pi)
-            plot(li$time, li$theta,
+            plot(li$time, li$phi,
                  main=paste('Phase - L', n, sep=''),
                  xlab='Time (s)',
-                 ylab=expression(theta),
+                 ylab='',
                  ylim=c(-pi * 1.05, pi * 1.05),
                  yaxt='none',
                  col='seagreen', type=type,
                  panel.first=c(abline(v=marker.lost, lty=3)))
             axis(2, at=pos1, label=F, tck=-.03)
             axis(2, at=pos, label=tickmark, las=2)
-            axis(1, at=marker.oe, label=F, tck=-.04, col.ticks='deeppink')
+            if (! is.null(marker.oe))
+                axis(1, at=marker.oe, label=F, tck=-.04, col.ticks='deeppink')
             abline(h=pos, lwd=0.2)
     })
 }
@@ -617,7 +699,7 @@ plot.ui_oe <- function(ol, ex, phase, time_scale=NULL) {
                             ' outliers - L',
                             paste(phase, collapse=','), sep=''),
                  xlab='Time (s)',
-                 ylab=paste(q[m], substr(n, 2, 2), sep=''),
+                 ylabl='',
                  xlim=time_scale,
                  ylim=y_scale[[q[m]]],
                  col=colors[m], q='p')
@@ -644,25 +726,29 @@ save_plot <- function(plot, name, dir='.',
     }
 }
 
-# @x the phase difference betwee voltage and current, defined as phase of
+# Create time series of u and i, which have a phase shift.
+# @param phi the phase difference betwee voltage and current, defined as phase of
 #   voltage minus phase of current. we suppose voltage phase is zero.
+# @sr sampling rate
+# @return a list of ts, u, i 
 #
-plot.ui_phase_shift <- function(x = 0) {
-    v.rms <- 220
-    i.rms <- 50
-    f.0 <- 50
+create_ac <- function(phi=0, sr=6.4e3, duration=.04, f.0=50, v.rms=230, i.rms=50, plot=F) {
     w <- 2*pi*f.0
-    acq.freq <- 100*f.0
 
-    xs <- seq(-1/f.0, 1/f.0, 1/acq.freq)
-    u <- v.rms*sqrt(2)*cos(w*xs);
-    i <- i.rms*sqrt(2)*cos(w*xs - x);
-    plot(xs, u, type='l', col='orange', xlab='time', ylab='u/i')
-    lines(xs, i, col='blue')
-    abline(h=0, lty=3)
+    ts <- seq(0, duration, 1/sr)
+    u <- v.rms*sqrt(2)*cos(w*ts)
+    i <- i.rms*sqrt(2)*cos(w*ts - phi)
 
-    abline(v=0, lty=3)
-    abline(v=x/w, lty=3)
+    if (plot) {
+        plot(ts, u, type='l', col='darkorange1', xlab='time', ylab='u/i')
+        lines(ts, i, col='blue2')
+        abline(h=0, lty=3)
+
+        abline(v=0, lty=3)
+        abline(v=phi/w, lty=3)
+    }
+
+    return(list(ts=ts, u=u, i=i))
 }
 
 # Plot a fourier series.
