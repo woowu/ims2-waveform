@@ -8,15 +8,18 @@ npm i
 
 Linux:
 ```
-./wf-recv.mjs --device /dev/ttyUSB0 --baud 921600 --format usb
+./wf-recv.mjs --device /dev/ttyUSB0 --baud 921600 --format usb --out myfile.csv
 
 ```
 
 Windows:
 ```
-node wf-recv.mjs --device COM5 --baud 921600 --format usb
+node wf-recv.mjs --device COM5 --baud 921600 --format usb --out myfile.csv
 
 ```
+
+The output csv file will be split into multiple files: myfile-0001.csv,
+myfile-0002.csv, and so on.
 
 ## Frame formats
 
