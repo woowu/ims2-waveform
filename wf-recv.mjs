@@ -133,7 +133,7 @@ function handleFrame(frame, frameCounter, timestamp, workpad)
         for (var q = 0; q < 2; ++q) {
             value = new DataView(new Uint8Array(
                 frame.slice(pos, pos + 2)
-            ).buffer).getInt16(0, true);
+            ).buffer).getInt16(0, workpad.frameFormat == 'au');
             line += ',' + value;
             pos += 2;
         }
@@ -464,6 +464,10 @@ if (argv.out && ! argv.raw) {
     };
 }
 
+if (argv.format != 'au' && argv.format != 'usb') {
+    console.error('unknown frame format');
+    process.exit(1);
+}
 workpad.frameFormat = argv.format;
 
 if (argv.host)
