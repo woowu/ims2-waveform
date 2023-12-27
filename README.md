@@ -45,3 +45,20 @@ When receive waveform streaming from serial port. and the frame format is
 ```
 All A/V quantities are 16-bit integer in little endian. Checksum is 16-bit.
 
+## Outlier detection algorithms
+
+Find those extreme data points which are out of trend of the data sequence
+itself. Voltage and current sample data come as time series, the outlier
+detection alogrithm used to find those extreme voltage and current samples
+contained in a large set of time series.
+
+1. Calculate the derivative from the original series, so if data is (1, 2, 3,
+   4, ...), the derivative is (0, 1, 1, ...). This is done with R function
+   `diff()`. For example, if voltages stored in vector v, then the derivative
+   is `dv = diff(v)`.  All the following steps will use the derivative sequence
+   instead of the original sequence.
+
+2. Define a setpoint `sp` which denotes up to how many outlier data points we want
+   to find out from the `dv` set.
+
+
