@@ -20,14 +20,12 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
-import { exec } from 'node:child_process';
 import net from 'node:net';
 import yargs from 'yargs/yargs';
 import dump from 'buffer-hexdump';
 import moment from 'moment';
 import { SerialPort } from 'serialport';
 
-const WF_SAMPLE_RATE = 6.4e3;
 const WF_FRAME_SYNC = 0xa5;
 const WF_FRAME_HEAD_LEN = 1;
 const WF_FRAME_PAYLOAD_LEN = (2 + 2) * 3; /* u/i from 3 channels */
@@ -39,13 +37,10 @@ const MESSAGE_TIMESTAMP_LEN = 8;
 const MESSAGE_LEN_SZ = 4;
 const MESSAGE_HEAD_LEN = MESSAGE_START_LEN + MESSAGE_SEQNO_LEN + MESSAGE_TIMESTAMP_LEN + MESSAGE_LEN_SZ;
 const MAX_ROWS_EACH_FILE = 5.76e6;
-const FILE_HANDLER = 'wf-overview.R';
 
 const workpad = {
     execDir: path.dirname(process.argv[1]),
     ws: null,
-    outFilename: null,
-    dispatch: false,
     frameInMessage: true,   /* frames are wrappered in messages */
     frameFormat: 'au',
 };
@@ -77,10 +72,18 @@ const inStream = {
     })(10),
 };
 
-const streamPerf = {
-    lastLen: 0,
-    lastTime: new Date().getTime(),
-    updateCounter: 0,
+var stats = {
+    curr: {
+        lastTime: null,
+        recvLen: 0,
+        frameCnt: 0,
+    },
+    acc: {
+        recvLen: 0,
+        frameCnt: 0,
+        time: 2,
+    },
+    timer: null,
 };
 
 function putData(workpad, inQueue, data)
@@ -170,7 +173,9 @@ function parsePayload(payload, inStream, workpad)
             }
             pos += frameLen;
             last_successful_pos = pos;
+
             ++inStream.frameCounter;
+            statsOnNewFrameRecved(frameLen);
         } else {
             ++pos;
         }
@@ -239,14 +244,7 @@ function parseStream(inQueue, inStream, workpad)
         return;
     }
 
-    const b = inQueue.shift();
-
-    updateStreamPerf(streamPerf, inStream.buf.length, b.length);
-    if (! (streamPerf.updateCounter % 10))
-        console.log(`new chunk len: ${b.length} `
-            + `buf: ${streamPerf.lastLen} queue: ${inQueue.length} `
-            + ` consuming speed: ${streamPerf.kbps.toFixed(3)} kpbs`);
-    inStream.buf.push(...b);
+    inStream.buf.push(...inQueue.shift());
 
     /* Parse and strip whole messages, incompleted message will be left in
      * the stream buf intouched.
@@ -261,16 +259,6 @@ function parseStream(inQueue, inStream, workpad)
     }
 
     tryNext();
-}
-
-function updateStreamPerf(perf, currLen, appendLen)
-{
-    const consumed = perf.lastLen - currLen;
-    perf.kbps = consumed * 8 / (new Date().getTime() - perf.lastTime);
-
-    perf.lastLen = currLen + appendLen;
-    perf.lastTime = new Date().getTime();
-    ++perf.updateCounter;
 }
 
 function writeCsvRow(row, workpad)
@@ -290,35 +278,16 @@ function writeCsvRow(row, workpad)
         csvInfo.rowCounter = 0;
         return filename;
     };
-    const dispatchFile = filename => {
-        const handlerFilename = path.join(workpad.execDir, FILE_HANDLER);
-        console.log(`send ${filename} to ${handlerFilename}`);
-        const cmdline = `${handlerFilename} -f ${filename}`;
-        exec(cmdline, (error, stdout, stderr) => {
-            if (error)
-                throw new Error(`exec ${cmdline} error: ${error}`);
-        });
-    };
 
     if (! csvInfo) return;
     if (! workpad.ws)
         csvInfo.filename = newFile();
     if (csvInfo.rowCounter == MAX_ROWS_EACH_FILE) {
         endOutStream(workpad);
-        if (workpad.dispatch) dispatchFile(csvInfo.filename);
         csvInfo.filename = newFile();
     }
     workpad.ws.write(row + '\n');
     ++csvInfo.rowCounter;
-}
-
-function writeRaw(data, workpad)
-{
-    if (! workpad.ws) {
-        workpad.ws = workpad.outfFilename == '-' ? process.stdout
-            : fs.createWriteStream(workpad.outFilename);
-    }
-    workpad.ws.write(data);
 }
 
 function endOutStream(workpad)
@@ -334,10 +303,6 @@ function endOutStream(workpad)
 function handleInData(data)
 {
     try {
-        if (argv.raw) {
-            writeRaw(data, workpad);
-            return false;
-        }
         putData(workpad, inQueue, data);
         if (argv.frames && inStream.frameCounter >= argv.frames)
             return true;
@@ -393,6 +358,42 @@ function useSerialPort({ device, baud })
 
 /*---------------------------------------------------------------------------*/
 
+function statsOnNewFrameRecved(len)
+{
+    const startPrintTimer = () => {
+        stats.timer = setTimeout(() => {
+            printRunningStats(stats);
+            resetRunningStats();
+            startPrintTimer();
+        }, 2000);
+    };
+
+    if (stats.curr.lastTime == null) stats.curr.lastTime = new Date();
+    stats.curr.recvLen += len;
+    ++stats.curr.frameCnt;
+
+    if (stats.timer == null) startPrintTimer();
+}
+
+function printRunningStats()
+{
+    const time = new Date() - stats.curr.lastTime;
+    const avgSpeed = (stats.acc.recvLen * 8/stats.acc.time).toFixed(3);
+    console.log(`${stats.curr.frameCnt} frame ${stats.curr.recvLen} bytes`
+        + ` ${(stats.curr.recvLen * 8/time).toFixed(3)} kbps`
+        + ` average ${avgSpeed} kbps`);
+}
+
+function resetRunningStats()
+{
+    stats.acc.recvLen += stats.curr.recvLen;
+    stats.acc.frameCnt += stats.curr.frameCnt;
+    stats.acc.time += new Date() - stats.curr.lastTime;
+    stats.curr = {lastTime: new Date(), recvLen: 0, frameCnt: 0};
+}
+
+/*---------------------------------------------------------------------------*/
+
 const argv = yargs(process.argv.slice(2))
     .option({
         'h': {
@@ -407,17 +408,9 @@ const argv = yargs(process.argv.slice(2))
         },
         'o': {
             alias: 'out',
-            describe: 'output filename for saving csv or raw stream',
-            type: 'string',
-        },
-        'r': {
-            alias: 'raw',
-            describe: 'saving raw stream instead of csv',
-            type: 'boolean',
-        },
-        'i': {
-            alias: 'input',
-            describe: 'input raw filename',
+            describe: 'output filename for saving csv;'
+                + ' actual filenames will be appeneded with a sequence'
+                + ' number at the end of its basename',
             type: 'string',
         },
         'd': {
@@ -442,17 +435,9 @@ const argv = yargs(process.argv.slice(2))
             type: 'string',
             default: 'au',
         },
-        'c': {
-            alias: 'dispatch',
-            describe: 'dispatch generated csv for post processing',
-            type: 'boolean',
-        },
     }).argv;
 
-workpad.outFilename = argv.out;
-workpad.dispatch = argv.dispatch;
-
-if (argv.out && ! argv.raw) {
+if (argv.out) {
     const { dir, name, ext } = path.parse(argv.out);
     csvInfo = {
         dir,
@@ -475,17 +460,4 @@ if (argv.host)
 else if (argv.device) {
     workpad.frameInMessage = false;
     useSerialPort({ device: argv.device, baud: argv.baud });
-} else if (argv.input) {
-    const rs = argv.input == '-' ? process.stdin
-        : fs.createReadStream(argv.input)
-    rs.on('close', () => {
-        waitDataDrain();
-    });
-    rs.on('error', err => {
-        endOutStream(workpad);
-        throw(err);
-    })
-    rs.on('data', data => {
-        if (handleInData(data)) rs.destroy();
-    })
 }

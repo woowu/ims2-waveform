@@ -1,8 +1,10 @@
 #!/usr/bin/node --harmony
 'use strict';
 
-# Create a simulated tcp server from which a client can receive ims waveform
-# stream
+/**
+ * Create a simulated tcp server from which a client can receive ims waveform
+ * stream
+ */
 
 import net from 'node:net';
 

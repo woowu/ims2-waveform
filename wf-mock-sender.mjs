@@ -1,8 +1,10 @@
 #!/usr/bin/node --harmony
 'use strict';
 
-# Send simulated waveform stream into a serial port, usually socat created
-# pseudo one, from which a client can receive the streaming.
+/**
+ * Send simulated waveform stream into a serial port, usually socat created
+ * pseudo one, from which a client can receive the streaming.
+ */
 
 import { SerialPort } from 'serialport';
 import yargs from 'yargs/yargs';
@@ -39,7 +41,7 @@ function generateNFrames(n)
 function wrLoop(stream)
 {
     (function next() {
-        stream.write(generateNFrames(128 * 10));
+        stream.write(generateNFrames(10));
         setTimeout(next, 1);
     }());
 }
