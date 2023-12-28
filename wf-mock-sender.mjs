@@ -1,6 +1,9 @@
 #!/usr/bin/node --harmony
 'use strict';
 
+# Send simulated waveform stream into a serial port, usually socat created
+# pseudo one, from which a client can receive the streaming.
+
 import { SerialPort } from 'serialport';
 import yargs from 'yargs/yargs';
 
