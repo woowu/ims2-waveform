@@ -82,8 +82,8 @@ var stats = {
         recvLen: 0,
         frameCnt: 0,
         time: 2,
+        frameErr: 0,
     },
-    timer: null,
 };
 
 function putData(workpad, inQueue, data)
@@ -145,6 +145,9 @@ function handleFrame(frame, frameCounter, timestamp, workpad)
     return true;
 }
 
+/**
+ * Payload of a message are frames.
+ */
 function parsePayload(payload, inStream, workpad)
 {
     const data = [...inStream.remainingPayload, ...payload];
@@ -164,8 +167,9 @@ function parsePayload(payload, inStream, workpad)
                         ? inStream.frameCounter
                         : inStream.frameCounter + 1,
                     inStream.timestamp, workpad)) {
-            if (pos > last_successful_pos) {
+            if (pos > last_successful_pos && last_successful_pos) {
                 console.log(`skipped ${pos - last_successful_pos} bytes`);
+                statsIncFrameErr();
                 /* all the continuous not-consumed bytes are counted as a
                  * single bad frame, which should occupy a counter.
                  */
@@ -360,28 +364,34 @@ function useSerialPort({ device, baud })
 
 function statsOnNewFrameRecved(len)
 {
-    const startPrintTimer = () => {
-        stats.timer = setTimeout(() => {
-            printRunningStats(stats);
-            resetRunningStats();
-            startPrintTimer();
-        }, 2000);
-    };
+    const PRINT_PERIOD = 2000;
 
     if (stats.curr.lastTime == null) stats.curr.lastTime = new Date();
     stats.curr.recvLen += len;
     ++stats.curr.frameCnt;
 
-    if (stats.timer == null) startPrintTimer();
+    const elapsed = new Date() - stats.curr.lastTime;
+    if (elapsed >= PRINT_PERIOD) {
+        printRunningStats(stats);
+        resetRunningStats();
+    }
+}
+
+function statsIncFrameErr()
+{
+    ++stats.acc.frameErr;
 }
 
 function printRunningStats()
 {
     const time = new Date() - stats.curr.lastTime;
-    const avgSpeed = (stats.acc.recvLen * 8/stats.acc.time).toFixed(3);
+    const speed = stats.curr.recvLen * 8/time;
+    const avgSpeed = stats.acc.recvLen * 8/stats.acc.time;
+    const fer = stats.acc.frameErr / stats.acc.frameCnt * 100;
     console.log(`${stats.curr.frameCnt} frame ${stats.curr.recvLen} bytes`
-        + ` ${(stats.curr.recvLen * 8/time).toFixed(3)} kbps`
-        + ` average ${avgSpeed} kbps`);
+        + ` ${speed.toFixed(3)} kbps`
+        + ` avg ${avgSpeed.toFixed(3)} kbps`
+        + ` FER ${fer.toFixed(2)}%`);
 }
 
 function resetRunningStats()

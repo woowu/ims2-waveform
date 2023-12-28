@@ -41,7 +41,7 @@ function generateNFrames(n)
 function wrLoop(stream)
 {
     (function next() {
-        stream.write(generateNFrames(10));
+        stream.write(generateNFrames(20));
         setTimeout(next, 1);
     }());
 }
