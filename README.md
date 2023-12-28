@@ -28,7 +28,7 @@ is in the form:
  ```
   0x3e | seqno | 64bit timestamp | 32 bit len | waveform chunk
 ```
-The waveform chunk contains one or more or incompleted frames as
+The waveform chunk contains one or more or uncompleted frames as
 described below.
 
 When receive waveform streaming from serial port. and the frame format is
@@ -49,7 +49,7 @@ All A/V quantities are 16-bit integer in little endian. Checksum is 16-bit.
 
 Find those extreme data points which are out of trend of the data sequence
 itself. Voltage and current sample data come as time series, the outlier
-detection alogrithm used to find those extreme voltage and current samples
+detection algorithm used to find those extreme voltage and current samples
 contained in a large set of time series.
 
 1. Calculate the derivative from the original series, so if data is (1, 2, 3,
