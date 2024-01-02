@@ -42,7 +42,7 @@ myfile-0002.csv, and so on.
 Frame format (`au` format):
 
 ```
-  0xa5 | A_l1 | V_l1 | A_l2 | V_L2 | A_l3 | V_l3 | chksum 
+  0xa5 | V_l1 | A_l1 | V_l2 | A_l2 | V_l3 | A_l3 | chksum 
 ```
 
 All A/V quantities are 16-bit integer in little endian. Checksum is 16-bit.
@@ -72,7 +72,7 @@ myfile-0002.csv, and so on.
 Frame format (`usb` format):
 
 ```
-  0xa5 | A_l1 | V_l1 | A_l2 | V_L2 | A_l3 | V_l3
+  0xa5 | V_l1 | A_l1 | V_l2 | A_l2 | V_l3 | A_l3
 ```
 
 All A/V quantities are 16-bit integer in big endian.
