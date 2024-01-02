@@ -4,7 +4,11 @@
 
 npm i
 
-## Receiving
+## Receive waveforms from the streaming serial port
+
+Connect your PC, using an USB-to-TTL cable, to the meter waveform streaming UART pins (PIN 11 and PIN 1) following the below diagram:
+
+![Serial connection](./doc/serial-connection.png)
 
 Linux:
 ```
