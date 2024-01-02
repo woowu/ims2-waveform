@@ -77,3 +77,28 @@ Frame format:
 
 All A/V quantities are 16-bit integer in big endian.
 
+## Inspect the screen output of wf-recv
+
+In additional to write received waveform information to CSV files, the wf-recv tool also print performance and diagnostic information while running. Below is a sample output of the screen output:
+
+```
+12953 frame 168389 bytes 669.539 kbps avg 0.000 kbps FER NaN%
+13016 frame 169208 bytes 665.846 kbps avg 667.879 kbps FER 0.00%
+12811 frame 166543 bytes 666.172 kbps avg 666.858 kbps FER 0.00%
+12749 frame 165737 bytes 662.617 kbps avg 666.631 kbps FER 0.00%
+13120 frame 170560 bytes 666.575 kbps avg 665.551 kbps FER 0.00%
+13144 frame 170872 bytes 664.872 kbps avg 665.759 kbps FER 0.00%
+13032 frame 169416 bytes 665.028 kbps avg 665.609 kbps FER 0.00%
+13088 frame 170144 bytes 665.275 kbps avg 665.478 kbps FER 0.00%
+13048 frame 169624 bytes 665.192 kbps avg 665.412 kbps FER 0.00%
+13120 frame 170560 bytes 664.951 kbps avg 665.387 kbps FER 0.00%
+13144 frame 170872 bytes 665.195 kbps avg 665.343 kbps FER 0.00%
+13008 frame 169104 bytes 665.109 kbps avg 665.300 kbps FER 0.00%
+```
+
+Each row prints the summary for the last period (2s) and the so-far statistics, that contains the following information:
+
+1. Number of frames and number of bytes received in this period -- each frame has 15 bytes in the `ca` format and 13 bytes in the `usb` format.
+2. Instantaneous throughput of the period and average throughput of the so-far receiving. When receiving over serial port using `au` format, the throughput should be around 960 kbps; when receiving over USB using `usb` format, the throughput should be around 665.6 kbps.
+3. Frame error rate (FER) of the period: the ratio of incorrect frames over the total received frames of the period. When receiving over USB using `usb` format, you should observe FER equals zero.
+
