@@ -1,14 +1,14 @@
-# Receive/Viz Picasso IMS2 A/V signal waveform
+# Receive Picasso IMS2 A/V signal waveform
 
-## Install the waveform receiver on PC
+## Installation
 
-You need to firstly install nodejs on your Linux or Window, then change into the uncompressed directory of the ims-waveform followed by running the following command to install all the dependencies:
+To install ims-waveform tool, you need to firstly install nodejs on your Linux or Window. Then change into the uncompressed directory of the ims-waveform followed by running the below command to install all the dependencies:
 
 ```
 npm i
 ```
 
-## Enable IMS waveform streaming on the meter
+## Enable IMS waveform streaming
 
 Using a meter TestApp firmware and run the below SCPI command to enable the waveform streaming:
 
@@ -18,7 +18,7 @@ IMS:WaveForm:ON
 
 Power cycle the meter after issued the command.
 
-## Receive waveforms from meter streaming serial port
+## Receive waveforms over the serial port
 
 Connect your PC, using an USB-to-TTL cable, to the meter waveform streaming UART pins (PIN 11 and PIN 1) following the below diagram:
 
@@ -48,7 +48,7 @@ Frame format:
 All A/V quantities are 16-bit integer in little endian. Checksum is 16-bit.
 
 
-## Receive waveforms from meter USB port
+## Receive waveforms over USB
 
 Connect your PC and the meter using an USB to serial cable following the below diagram:
 
@@ -76,21 +76,4 @@ Frame format:
 ```
 
 All A/V quantities are 16-bit integer in big endian.
-
-## Waveform data analysis
-### Outlier detection algorithms
-
-Find those extreme data points which are out of trend of the data sequence
-itself. Voltage and current sample data come as time series, the outlier
-detection algorithm used to find those extreme voltage and current samples
-contained in a large set of time series.
-
-1. Calculate the derivative from the original series, so if data is (1, 2, 3,
-   4, ...), the derivative is (0, 1, 1, ...). This is done with R function
-   `diff()`. For example, if voltages stored in vector v, then the derivative
-   is `dv = diff(v)`.  All the following steps will use the derivative sequence
-   instead of the original sequence.
-
-2. Define a setpoint `sp` which denotes up to how many outlier data points we want
-   to find out from the `dv` set.
 
