@@ -39,7 +39,7 @@ node wf-recv.mjs --device COM5 --baud 1333000 --format au --out myfile.csv
 The output csv file will be split into multiple files: myfile-0001.csv,
 myfile-0002.csv, and so on.
 
-Frame format:
+Frame format (`au` format):
 
 ```
   0xa5 | A_l1 | V_l1 | A_l2 | V_L2 | A_l3 | V_l3 | chksum 
@@ -69,7 +69,7 @@ node wf-recv.mjs --device COM5 --format usb --out myfile.csv
 The output csv file will be split into multiple files: myfile-0001.csv,
 myfile-0002.csv, and so on.
 
-Frame format:
+Frame format (`usb` format):
 
 ```
   0xa5 | A_l1 | V_l1 | A_l2 | V_L2 | A_l3 | V_l3
