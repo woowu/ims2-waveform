@@ -25,7 +25,7 @@
      inkscape:document-units="mm"
      showgrid="true"
      inkscape:zoom="2.0899411"
-     inkscape:cx="254.55263"
+     inkscape:cx="255.03111"
      inkscape:cy="203.11577"
      inkscape:window-width="2514"
      inkscape:window-height="1370"
@@ -125,7 +125,7 @@
        style="fill:none;stroke:#000000;stroke-width:0.213079;stroke-dasharray:none"
        id="rect4"
        width="17.772596"
-       height="23.836313"
+       height="20.096334"
        x="45.939217"
        y="55.181782" />
     <text
@@ -187,5 +187,17 @@
        style="fill:none;stroke:#000000;stroke-width:0.213078;stroke-dasharray:none"
        d="M 63.620244,60.420056 H 83.624443"
        id="path7" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;line-height:1;font-family:sans-serif;-inkscape-font-specification:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-variant-east-asian:normal;font-feature-settings:normal;font-variation-settings:normal;text-indent:0;text-align:center;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:0px;word-spacing:0px;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;shape-margin:0;inline-size:0;opacity:1;vector-effect:none;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.982677;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;-inkscape-stroke:none;stop-color:#000000;stop-opacity:1"
+       x="122.38446"
+       y="116.56025"
+       id="text8"
+       transform="matrix(0.26458333,0,0,0.26458333,34.093918,28.434707)"><tspan
+         sodipodi:role="line"
+         id="tspan8"
+         x="122.38446"
+         y="116.56025"
+         style="font-size:10.6667px">USB-to-TTL</tspan></text>
   </g>
 </svg>

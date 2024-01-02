@@ -1,55 +1,84 @@
 # Receive/Viz Picasso IMS2 A/V signal waveform
 
-## Installation
+## Install the waveform receiver on PC
 
+You need to firstly install nodejs on your Linux or Window, then change into the uncompressed directory of the ims-waveform followed by running the following command to install all the dependencies:
+
+```
 npm i
+```
 
-## Receive waveforms from the streaming serial port
+## Enable IMS waveform streaming on the meter
+
+Using a meter TestApp firmware and run the below SCPI command to enable the waveform streaming:
+
+```
+IMS:WaveForm:ON
+```
+
+Power cycle the meter after issued the command.
+
+## Receive waveforms from meter streaming serial port
 
 Connect your PC, using an USB-to-TTL cable, to the meter waveform streaming UART pins (PIN 11 and PIN 1) following the below diagram:
 
 ![Serial connection](./doc/serial-connection.svg)
 
-Linux:
+Run wf-recv on Linux PC to receive the waveforms:
 ```
-./wf-recv.mjs --device /dev/ttyUSB0 --baud 921600 --format usb --out myfile.csv
+./wf-recv.mjs --device /dev/ttyUSB0 --baud 1333000 --format au --out myfile.csv
 
 ```
 
-Windows:
+Run wf-recv on Windows PC to receive the waveforms:
 ```
-node wf-recv.mjs --device COM5 --baud 921600 --format usb --out myfile.csv
+node wf-recv.mjs --device COM5 --baud 1333000 --format au --out myfile.csv
 
 ```
 
 The output csv file will be split into multiple files: myfile-0001.csv,
 myfile-0002.csv, and so on.
 
-## Frame formats
+Frame format:
 
-When receive waveform streaming from TCP. Each message
-is in the form:
- ```
-  0x3e | seqno | 64bit timestamp | 32 bit len | waveform chunk
-```
-The waveform chunk contains one or more or uncompleted frames as
-described below.
-
-When receive waveform streaming from serial port. and the frame format is
-'au', the stream contains frames of the form:
 ```
   0xa5 | A_l1 | V_l1 | A_l2 | V_L2 | A_l3 | V_l3 | chksum 
 ```
+
 All A/V quantities are 16-bit integer in little endian. Checksum is 16-bit.
 
-When receive waveform streaming from serial port. and the frame format is
-'usb', the stream contains frames of the form:
+
+## Receive waveforms from meter USB port
+
+Connect your PC and the meter using an USB to serial cable following the below diagram:
+
+![USB connection](./doc/usb-connection.svg)
+
+Run wf-recv on Linux PC to receive the waveforms:
+```
+./wf-recv.mjs --device /dev/ttyUSB0 --format usb --out myfile.csv
+
+```
+
+Run wf-recv on Windows PC to receive the waveforms:
+```
+node wf-recv.mjs --device COM5 --format usb --out myfile.csv
+
+```
+
+The output csv file will be split into multiple files: myfile-0001.csv,
+myfile-0002.csv, and so on.
+
+Frame format:
+
 ```
   0xa5 | A_l1 | V_l1 | A_l2 | V_L2 | A_l3 | V_l3
 ```
-All A/V quantities are 16-bit integer in little endian. Checksum is 16-bit.
 
-## Outlier detection algorithms
+All A/V quantities are 16-bit integer in big endian.
+
+## Waveform data analysis
+### Outlier detection algorithms
 
 Find those extreme data points which are out of trend of the data sequence
 itself. Voltage and current sample data come as time series, the outlier
@@ -64,5 +93,4 @@ contained in a large set of time series.
 
 2. Define a setpoint `sp` which denotes up to how many outlier data points we want
    to find out from the `dv` set.
-
 
