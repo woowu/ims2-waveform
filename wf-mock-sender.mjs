@@ -71,30 +71,45 @@ function generateSamples(nStart, nEnd)
     return bytes;
 }
 
-function wrLoop(stream)
+function wrLoop(stream, max_samples, BER)
 {
     const period = 25;
-    const speedAdj = 80;
-    const step = period * 1e-3 * S_FREQ + speedAdj;
+    const speedGain = 1.65;
+    const step = parseInt(period * 1e-3 * S_FREQ * speedGain);
     var n = 0;
-    var cnt = 0;
+    var stat_cnt = 0;
     var t;
+    var octetsSent = 0;
 
     t = new Date().valueOf();
     (function next() {
-        stream.write(generateSamples(n, n + step));
+        var end = n + step;
+        if (end > max_samples) end = max_samples;
+        const data = generateSamples(n, end);
+        octetsSent = data.length;
+        if (BER && octetsSent >= BER) {
+            const idx1 = parseInt(Math.random() * data.length);
+            const idx2 = parseInt(Math.random() * 8);
+            data[idx1] ^= 1 << idx2;
+            octetsSent = 0;
+        }
+        stream.write(data);
+
+        if (end == max_samples)
+            return;
+
         n += step;
         setTimeout(next, period);
 
-        ++cnt;
-        if (cnt == 50) {
+        ++stat_cnt;
+        if (stat_cnt == 100) {
             const duration = new Date().valueOf() - t;
-            const size = cnt * step * 15;
+            const size = stat_cnt * step * 15;
             const kbps = (size * 10)/duration;
             console.log(`sent ${size} octets, ${kbps.toFixed(3)} kbps`);
 
             t = new Date().valueOf();
-            cnt = 0;
+            stat_cnt = 0;
         }
     }());
 }
@@ -121,7 +136,28 @@ const argv = yargs(process.argv.slice(2))
             type: 'string',
             default: 'au',
         },
+        'n': {
+            alias: 'number',
+            describe: 'number of data samples',
+            type: 'number',
+            default: 0,
+        },
+        'B': {
+            alias: 'BER',
+            describe: 'after how many bytes, there will be a one bit error',
+            type: 'number',
+            default: 0,
+        },
     }).argv;
+
+if (argv.number < 0) {
+    console.error("Number of data samples cannot be negative.");
+    process.exit(1);
+}
+if (argv.BER < 0) {
+    console.error("BER must be a non-negative integer.");
+    process.exit(1);
+}
 
 sampleGenerator = useSampleGenerator(argv.format, 50, S_FREQ
     , 220*Math.sqrt(2), 10*Math.sqrt(2)
@@ -135,7 +171,8 @@ const seri = new SerialPort({
 
 seri.open(err => {
     if (err) throw new Error(err);
+    wrLoop(seri, argv.number, argv.BER);
+    process.exit(1);
 });
 seri.on('data', () => {
 });
-wrLoop(seri);
