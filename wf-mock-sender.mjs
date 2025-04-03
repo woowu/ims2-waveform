@@ -84,7 +84,8 @@ function wrLoop(stream, max_samples, BER)
     t = new Date().valueOf();
     (function next() {
         var end = n + step;
-        if (end > max_samples) end = max_samples;
+        if (max_samples > 0 && end > max_samples)
+            end = max_samples;
         const data = generateSamples(n, end);
         octetsSent = data.length;
         if (BER && octetsSent >= BER) {
@@ -96,10 +97,7 @@ function wrLoop(stream, max_samples, BER)
         stream.write(data);
 
         if (end == max_samples)
-            return;
-
-        n += step;
-        setTimeout(next, period);
+            process.exit(0);
 
         ++stat_cnt;
         if (stat_cnt == 100) {
@@ -111,6 +109,9 @@ function wrLoop(stream, max_samples, BER)
             t = new Date().valueOf();
             stat_cnt = 0;
         }
+
+        n += step;
+        setTimeout(next, period);
     }());
 }
 
@@ -172,7 +173,6 @@ const seri = new SerialPort({
 seri.open(err => {
     if (err) throw new Error(err);
     wrLoop(seri, argv.number, argv.BER);
-    process.exit(1);
 });
 seri.on('data', () => {
 });
