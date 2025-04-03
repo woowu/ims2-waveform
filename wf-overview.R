@@ -21,7 +21,7 @@ if (is.null(opt$filename)) {
     stop('no csv filename provided')
 }
 
-source('~/R/local-script/ac-tools.R')
+source('./ac-tools.R')
 namebase <- sub('\\.[[:alnum:]]+$', '', basename(opt$filename))
 print(paste('load', opt$filename))
 data <- read_wf(opt$filename)
