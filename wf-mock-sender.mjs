@@ -20,9 +20,10 @@ var sampleGenerator;
  * aPeak: Peak current
  * vScaler: voltage scaler
  * aScaler: current scaler
+ * phaseShifts: phase shift of each of three lines in radians
  */
 function useSampleGenerator(format, signalFreq, sampleFreq
-    , vPeak, aPeak, vScaler, aScaler)
+    , vPeak, aPeak, vScaler, aScaler, phaseShifts)
 {
     return n => {
         const payloadLen = 12;
@@ -34,6 +35,7 @@ function useSampleGenerator(format, signalFreq, sampleFreq
             ) * vScaler);
             const a = Math.round(aPeak * Math.cos(
                 2*Math.PI * signalFreq/sampleFreq * n + line * 2 * Math.PI / 3
+                - phaseShifts[line]
             ) * aScaler);
 
             var b0, b1;
@@ -162,7 +164,8 @@ if (argv.BER < 0) {
 
 sampleGenerator = useSampleGenerator(argv.format, 50, S_FREQ
     , 220*Math.sqrt(2), 10*Math.sqrt(2)
-    , 1/2.1522e-2, 1/4.61806e-3);
+    , 1/2.1522e-2, 1/4.61806e-3
+    , [0, (30/180)*Math.PI, (-30/180)*Math.PI]);
 
 const seri = new SerialPort({
     path: argv.device,
