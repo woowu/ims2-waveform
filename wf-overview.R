@@ -6,15 +6,21 @@ VOLTAGE = 230
 IMAX = 100
 IB = 10
 AC_PERIOD = 0.02
-
+           
 option_list = list(
     make_option(c('-f', '--filename'), type='character', help='cvs filename'),
     make_option(c('-p', '--phase'), type='numeric', default=NULL,
-                help='select a single phase')
+                help='select a single phase'),
+    make_option(c('-u', '--uscale'), type='numeric', default=2.1522e-2,
+                help='voltage scaler'),
+    make_option(c('-i', '--iscale'), type='numeric', default=4.61806e-3,
+                help='current scaler')
 )
  
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
+
+scales = c(opt$uscale, opt$iscale)
 
 if (is.null(opt$filename)) {
     print_help(opt_parser)
@@ -24,7 +30,7 @@ if (is.null(opt$filename)) {
 source('./ac-tools.R')
 namebase <- sub('\\.[[:alnum:]]+$', '', basename(opt$filename))
 print(paste('load', opt$filename))
-data <- read_wf(opt$filename)
+data <- read_wf(opt$filename, scales)
 print(paste(nrow(data), 'samples'))
 
 if (is.null(opt$phase)) {
@@ -88,7 +94,7 @@ event_time <- sort(unique(c(all_u, all_i)))
 plot_timeline <- function(data, event_time, lost_time) {
     print(paste('plot timeline'))
     sapply(phase, function(n) {
-        save_plot(function() plot.rms_and_phase(data, phase=n:n,
+        save_plot(function() plot.rms_and_phase(data, phase=n:n, scales=scales,
                                                 threshold=c(.05, .1, pi*.01),
                                                 marker.oe=event_time,
                                                 marker.lost=lost_time),
@@ -100,7 +106,7 @@ plot_timeline <- function(data, event_time, lost_time) {
 plot_histogram <- function(data) {
     print(paste('plot histogram'))
     sapply(phase, function(n) {
-        save_plot(function() plot.ui_hist(data, phase=n:n),
+        save_plot(function() plot.ui_hist(data, phase=n:n, scales=scales),
                   name=paste('03-hist_', namebase, '_l', n, sep=''))
     })
 }
@@ -175,7 +181,8 @@ plot_oe_detail <- function(event_time, oe_time) {
                                 range,
                                 phase=n:n,
                                 marker.u=markers$u,
-                                marker.i=markers$i)
+                                marker.i=markers$i,
+                                scales=scales)
                         },
                         name=plot_name, png=png, svg=svg
                 )

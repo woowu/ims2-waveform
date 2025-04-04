@@ -3,8 +3,6 @@ library(dplR)
 #library(dplyr)
 library(svglite)
 
-USCALE <- 2.1522e-2
-ISCALE <- 4.61806e-3
 SR <- 6.4e3
 F0 <- 50
 SAMPLES_PER_PERIOD <- SR/F0
@@ -63,8 +61,12 @@ split_series <- function(s, splits) {
 rms.calc <- function(v, n) {
     if (n < SAMPLES_PER_PERIOD)
         return(NA)
-    else
-        return(sqrt(sum((v[max(1, n-127):n])^2)/SAMPLES_PER_PERIOD))
+    vv = v[max(1, n-127):n]
+    rms = sqrt(sum(vv^2)/SAMPLES_PER_PERIOD)
+    print('calc rms')
+    print(vv)
+    print(rms)
+    return(rms)
 }
 
 # Create a data from from a time and instantaneous vector, replacing the
@@ -288,19 +290,19 @@ ui_value_scale_to_plot_scale <- function(min_max) {
     min_max
 }
 
-read_wf <- function(filename) {
+read_wf <- function(filename, scales) {
     d <- read.csv(filename)
     if ('Seqno' %in% names(d)) {
         d$Time <- d$Seqno * 1/SR
     }
     if (! ('U1Scaled' %in% names(d)))
         d %>%
-            mutate(U1Scaled = U1 * USCALE) %>%
-            mutate(I1Scaled = I1 * ISCALE) %>%
-            mutate(U2Scaled = U2 * USCALE) %>%
-            mutate(I2Scaled = I2 * ISCALE) %>%
-            mutate(U3Scaled = U3 * USCALE) %>%
-            mutate(I3Scaled = I3 * ISCALE)
+            mutate(U1Scaled = U1 * scales[1]) %>%
+            mutate(I1Scaled = I1 * scales[2]) %>%
+            mutate(U2Scaled = U2 * scales[1]) %>%
+            mutate(I2Scaled = I2 * scales[2]) %>%
+            mutate(U3Scaled = U3 * scales[1]) %>%
+            mutate(I3Scaled = I3 * scales[2])
 }
 
 # The ims waveform original data is in 'data', this function plot
@@ -311,14 +313,13 @@ read_wf <- function(filename) {
 #   ablines on I plot
 #
 plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
-                         marker.u=c(), marker.i=c()) {
+                         marker.u=c(), marker.i=c(), scales) {
     par(bg='cornsilk', mfrow=c(2,length(phase)))
 
     data <- subset(data, Time >= range[1])
     data <- subset(data, Time <= range[2])
 
     q <- c('U', 'I')
-    scales <- c(USCALE, ISCALE)
     if (nrow(data) > 2 * SR) {
         colors <- c(color.u.alpha, color.i.alpha)
     } else {
@@ -354,7 +355,7 @@ plot.ui_inst <- function(data, range=c(-Inf, Inf), phase, type='p',
 
 # Plot U/I histogram
 #
-plot.ui_hist <- function(data, range=c(-Inf, Inf), phase) { 
+plot.ui_hist <- function(data, range=c(-Inf, Inf), phase, scales) { 
     par(bg='cornsilk', mfrow=c(2, length(phase)))
 
     data <- subset(data, Time >= range[1])
@@ -362,12 +363,12 @@ plot.ui_hist <- function(data, range=c(-Inf, Inf), phase) {
     if (nrow(data) == 0) stop('empty data')
 
     sapply(phase, function(n) {
-               hist(data[, paste('U', n, sep='')] * USCALE,
+               hist(data[, paste('U', n, sep='')] * scales[1],
                     xlab='Voltage (V)', main=paste('U hist - L', n, sep=''))
                }
     )
     sapply(phase, function(n) {
-               hist(data[, paste('I', n, sep='')] * ISCALE,
+               hist(data[, paste('I', n, sep='')] * scales[2],
                     xlab='Current (A)', main=paste('I hist - L', n, sep=''))
                }
     )
@@ -489,7 +490,7 @@ phase_shift <- function(time, u, i, freq.f0=50,
 # by a change rage threshold
 # @threshold sample reducing threshold of U, I and Phase shift 
 #
-plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
+plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase, scales,
                                threshold=c(0, 0, 0),
                                marker.oe=c(),
                                marker.lost=c(),
@@ -502,7 +503,6 @@ plot.rms_and_phase <- function(data, range=c(-Inf, Inf), phase,
 
     q <- c('U', 'I')
     qq <- c('u', 'i')
-    scales <- c(USCALE, ISCALE)
 
     li.rms <- lapply(1:length(q), function(m) {
         li <- lapply(phase, function(n) {
