@@ -36,10 +36,10 @@ function useSampleGenerator(format, signalFreq, sampleFreq
             const freqComp = 2*Math.PI * signalFreq/sampleFreq * n;
             const lineDelay = line * 2 * Math.PI / 3;
             const u = uPeak[line] * Math.cos(
-                freqComp + lineDelay
+                freqComp - lineDelay
             );
             const i = iPeak[line] * Math.cos(
-                freqComp + lineDelay - phaseShifts[line]
+                freqComp - lineDelay - phaseShifts[line]
             );
             const uScaled = Math.round(u * uk);
             const iScaled = Math.round(i * ik);
@@ -253,7 +253,7 @@ var ws = null;
 if (argv.csv) {
     ws = fs.createWriteStream(argv.csv);
     ws.write('Seqno,u1,i1,u2,i2,u3,i3,'
-        + 'u1Scaled,i1Scaled,u2Scaled,i2,i2Scaled,u3Scaled,i3Scaled\n');
+        + 'u1Scaled,i1Scaled,u2Scaled,i2Scaled,u3Scaled,i3Scaled\n');
 }
 sampleGenerator = useSampleGenerator(argv.format, 50, S_FREQ
     , uPeak, iPeak
