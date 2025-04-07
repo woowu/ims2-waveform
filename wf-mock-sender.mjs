@@ -127,9 +127,12 @@ function wrLoop(serial, max_samples, BER, csv)
         }
         serial.write(data);
 
-        if (end == max_samples) {
-            csv.end();
+        if (max_samples > 0 && end == max_samples) {
+            if (csv) csv.end();
             serial.end();
+            setTimeout(() => {
+                process.exit(0);
+            }, 500);
             return;
         }
 
@@ -249,10 +252,10 @@ if (iPeak.length != 3) {
 }
 iPeak = iPeak.map(x => parseFloat(x));
 
-var ws = null;
+var csv = null;
 if (argv.csv) {
-    ws = fs.createWriteStream(argv.csv);
-    ws.write('Seqno,u1,i1,u2,i2,u3,i3,'
+    csv = fs.createWriteStream(argv.csv);
+    csv.write('Seqno,u1,i1,u2,i2,u3,i3,'
         + 'u1Scaled,i1Scaled,u2Scaled,i2Scaled,u3Scaled,i3Scaled\n');
 }
 sampleGenerator = useSampleGenerator(argv.format, 50, S_FREQ
@@ -268,10 +271,7 @@ const seri = new SerialPort({
 
 seri.open(err => {
     if (err) throw new Error(err);
-    wrLoop(seri, argv.number, argv.BER, ws);
-    ws.on('close', () => {
-        process.exit(0);
-    });
+    wrLoop(seri, argv.number, argv.BER, csv);
 });
 seri.on('data', () => {
 });
