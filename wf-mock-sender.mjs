@@ -201,14 +201,14 @@ const argv = yargs(process.argv.slice(2))
         'V': {
             alias: 'uPeak',
             describe: 'Peak voltages of each line in comma separated volts',
-            type: 'number',
+            type: 'string',
             default: '311,311,311',
         },
         'A': {
             alias: 'iPeak',
             describe: 'Peak currents of each line in comma separated amps',
-            type: 'number',
-            default: '15,15,15',
+            type: 'string',
+            default: '50,50,50',
         },
         'c': {
             alias: 'csv',
